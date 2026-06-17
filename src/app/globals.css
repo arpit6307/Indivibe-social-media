@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brutal-yellow: #FFE834;
+  --color-pure-black: #111111;
+  --color-off-white: #FAFAF8;
+  --color-mid-gray: #666666;
+  --color-light-gray: #F5F5F5;
+  --color-error-red: #E02424;
+  --color-success-green: #057A55;
+  --color-link-blue: #1A56DB;
+
+  --shadow-brutal-btn: 4px 4px 0px #111111;
+  --shadow-brutal-card: 5px 5px 0px #111111;
+  
+  --font-sans: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --font-display: "Arial Black", Impact, sans-serif;
+}
+
+:root {
+  --background: #FAFAF8;
+  --foreground: #111111;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Brutalist CSS Utilities & Animations */
+.brutal-border {
+  border: 2.5px solid #111111;
+}
+
+.brutal-shadow-btn {
+  box-shadow: 4px 4px 0px #111111;
+}
+
+.brutal-shadow-card {
+  box-shadow: 5px 5px 0px #111111;
+}
+
+.brutal-transition {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #FAFAF8;
+  border-left: 2.5px solid #111111;
+}
+::-webkit-scrollbar-thumb {
+  background: #FFE834;
+  border: 2.5px solid #111111;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 🌙 Dynamic Dark Mode Overrides */
+body.dark {
+  background-color: #111111 !important;
+  color: #FAFAF8 !important;
+}
+
+body.dark ::-webkit-scrollbar-track {
+  background: #111111 !important;
+  border-left: 2.5px solid #FAFAF8 !important;
+}
+
+body.dark ::-webkit-scrollbar-thumb {
+  background: #FFE834 !important;
+  border: 2.5px solid #FAFAF8 !important;
+}
+
+body.dark .bg-white,
+body.dark .bg-off-white {
+  background-color: #1A1A1A !important;
+}
+
+body.dark .bg-light-gray {
+  background-color: #262626 !important;
+}
+
+body.dark .text-pure-black,
+body.dark .text-black,
+body.dark .text-gray-900 {
+  color: #FAFAF8 !important;
+}
+
+body.dark .text-mid-gray,
+body.dark .text-gray-500,
+body.dark .text-gray-600 {
+  color: #A3A3A3 !important;
+}
+
+body.dark .border-pure-black,
+body.dark .brutal-border,
+body.dark .border-black,
+body.dark .border-2,
+body.dark .border-3,
+body.dark .border-r-3,
+body.dark .border-b-3,
+body.dark .border-t-3 {
+  border-color: #FAFAF8 !important;
+}
+
+/* Maintain yellow button background in dark mode for contrast */
+body.dark .bg-brutal-yellow {
+  background-color: #FFE834 !important;
+  color: #111111 !important;
+}
+
+body.dark .shadow-\[2px_2px_0px_\#111\],
+body.dark .shadow-\[2px_2px_0px_\#111111\] {
+  box-shadow: 2px 2px 0px #FAFAF8 !important;
+}
+
+body.dark .shadow-\[3px_3px_0px_\#111\],
+body.dark .shadow-\[3px_3px_0px_\#111111\],
+body.dark .shadow-\[0_2px_0px_\#111\] {
+  box-shadow: 3px 3px 0px #FAFAF8 !important;
+}
+
+body.dark .shadow-\[4px_4px_0px_\#111\],
+body.dark .shadow-\[4px_4px_0px_\#111111\] {
+  box-shadow: 4px 4px 0px #FAFAF8 !important;
+}
+
+body.dark .shadow-\[5px_5px_0px_\#111\],
+body.dark .shadow-\[5px_5px_0px_\#111111\] {
+  box-shadow: 5px 5px 0px #FAFAF8 !important;
+}
+
+body.dark .shadow-\[8px_8px_0px_\#111\],
+body.dark .shadow-\[8px_8px_0px_\#111111\] {
+  box-shadow: 8px 8px 0px #FAFAF8 !important;
+}
+
+body.dark .shadow-\[3px_0px_0px_\#111\] {
+  box-shadow: 3px 0px 0px #FAFAF8 !important;
+}
+
+body.dark .shadow-\[0_-2px_0px_\#111\] {
+  box-shadow: 0 -2px 0px #FAFAF8 !important;
+}
+
+body.dark .hover\:shadow-\[6px_6px_0px_\#111\]:hover {
+  box-shadow: 6px 6px 0px #FAFAF8 !important;
+}
+
+/* Ensure inputs/textareas are readable in dark mode */
+body.dark input, 
+body.dark textarea,
+body.dark select {
+  background-color: #262626 !important;
+  color: #FAFAF8 !important;
+  border-color: #FAFAF8 !important;
+}
+
+/* Fix specific widgets */
+body.dark .bg-error-red\/15 {
+  background-color: rgba(224, 36, 36, 0.25) !important;
+}
+
+body.dark .bg-brutal-yellow\/35 {
+  background-color: rgba(255, 232, 52, 0.25) !important;
+}

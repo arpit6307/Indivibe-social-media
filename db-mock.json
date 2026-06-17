@@ -1,0 +1,286 @@
+{
+  "registeredUsers": [
+    "arpitsinghyadav08@patr.in"
+  ],
+  "registeredUserProfiles": {
+    "arpitsinghyadav08@patr.in": {
+      "uid": "sjuT3RawQKcoaZbXG2wfSXOXpJ72",
+      "patrId": "arpitsinghyadav08@patr.in",
+      "username": "arpitsinghyadav18",
+      "displayName": "Arpit Singh Yadav",
+      "bio": "Full Stack Developer crafting digital experiences. Turning ideas into reality with code. Passionate about building the future, one line at a time.",
+      "profilePhotoUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781701405/indivibe_avatars/veq7plcevixljyfknlb1.png",
+      "followersCount": 1,
+      "followingCount": 1,
+      "postsCount": 0,
+      "isPrivate": true,
+      "gender": "male",
+      "category": "creator",
+      "createdAt": "2026-06-17T12:57:18.801Z",
+      "followers": [
+        "8fnRm81ZhHhCdZZVvm0rMrw7e1r2"
+      ],
+      "following": [
+        "8fnRm81ZhHhCdZZVvm0rMrw7e1r2"
+      ]
+    },
+    "sjuT3RawQKcoaZbXG2wfSXOXpJ72": {
+      "uid": "sjuT3RawQKcoaZbXG2wfSXOXpJ72",
+      "patrId": "arpitsinghyadav08@patr.in",
+      "username": "arpitsinghyadav18",
+      "displayName": "Arpit Singh Yadav",
+      "bio": "Full Stack Developer crafting digital experiences. Turning ideas into reality with code. Passionate about building the future, one line at a time.",
+      "profilePhotoUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781701405/indivibe_avatars/veq7plcevixljyfknlb1.png",
+      "followersCount": 1,
+      "followingCount": 1,
+      "postsCount": 0,
+      "isPrivate": true,
+      "gender": "male",
+      "category": "creator",
+      "createdAt": "2026-06-17T12:57:18.801Z",
+      "followers": [
+        "8fnRm81ZhHhCdZZVvm0rMrw7e1r2"
+      ],
+      "following": [
+        "8fnRm81ZhHhCdZZVvm0rMrw7e1r2"
+      ]
+    },
+    "52k1SqnbOAVRopkTxRzaVISy5MV2": {
+      "uid": "52k1SqnbOAVRopkTxRzaVISy5MV2",
+      "patrId": "arpitsinghyadav56@patr.in",
+      "username": "arpitsinghyadav56",
+      "displayName": "Arpit Singh Yadav",
+      "bio": "",
+      "profilePhotoUrl": "https://api.dicebear.com/7.x/pixel-art/svg?seed=default",
+      "followersCount": 0,
+      "followingCount": 0,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [],
+      "followers": [],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781693779,
+        "nanoseconds": 19000000
+      }
+    },
+    "arpitsinghyadav56@patr.in": {
+      "uid": "52k1SqnbOAVRopkTxRzaVISy5MV2",
+      "patrId": "arpitsinghyadav56@patr.in",
+      "username": "arpitsinghyadav56",
+      "displayName": "Arpit Singh Yadav",
+      "bio": "",
+      "profilePhotoUrl": "https://api.dicebear.com/7.x/pixel-art/svg?seed=default",
+      "followersCount": 0,
+      "followingCount": 0,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [],
+      "followers": [],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781693779,
+        "nanoseconds": 19000000
+      }
+    },
+    "6ryadJkXeHQiis0Pm2HNHihxIeb2": {
+      "uid": "6ryadJkXeHQiis0Pm2HNHihxIeb2",
+      "patrId": "ashishsingh29@patr.in",
+      "username": "ashishsingh29",
+      "displayName": "Ashish Singh",
+      "bio": "",
+      "profilePhotoUrl": "https://api.dicebear.com/7.x/pixel-art/svg?seed=default",
+      "followersCount": 0,
+      "followingCount": 0,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [],
+      "followers": [],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781695250,
+        "nanoseconds": 927000000
+      }
+    },
+    "ashishsingh29@patr.in": {
+      "uid": "6ryadJkXeHQiis0Pm2HNHihxIeb2",
+      "patrId": "ashishsingh29@patr.in",
+      "username": "ashishsingh29",
+      "displayName": "Ashish Singh",
+      "bio": "",
+      "profilePhotoUrl": "https://api.dicebear.com/7.x/pixel-art/svg?seed=default",
+      "followersCount": 0,
+      "followingCount": 0,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [],
+      "followers": [],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781695250,
+        "nanoseconds": 927000000
+      }
+    },
+    "8fnRm81ZhHhCdZZVvm0rMrw7e1r2": {
+      "uid": "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
+      "patrId": "akshitsinghyadav24@patr.in",
+      "username": "akshitsinghyadav24",
+      "displayName": "Akshit Singh Yadav",
+      "bio": "Full Stack Developer crafting digital experiences. Turning ideas into reality with code. Passionate about building the future, one line at a time.",
+      "profilePhotoUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781704893/indivibe_avatars/l2nyy7zzcrnbwc8bn5w5.jpg",
+      "followersCount": 1,
+      "followingCount": 1,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [
+        "sjuT3RawQKcoaZbXG2wfSXOXpJ72"
+      ],
+      "followers": [
+        "sjuT3RawQKcoaZbXG2wfSXOXpJ72"
+      ],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781475165,
+        "nanoseconds": 27000000
+      }
+    },
+    "akshitsinghyadav24@patr.in": {
+      "uid": "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
+      "patrId": "akshitsinghyadav24@patr.in",
+      "username": "akshitsinghyadav24",
+      "displayName": "Akshit Singh Yadav",
+      "bio": "Full Stack Developer crafting digital experiences. Turning ideas into reality with code. Passionate about building the future, one line at a time.",
+      "profilePhotoUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781704893/indivibe_avatars/l2nyy7zzcrnbwc8bn5w5.jpg",
+      "followersCount": 1,
+      "followingCount": 1,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [
+        "sjuT3RawQKcoaZbXG2wfSXOXpJ72"
+      ],
+      "followers": [
+        "sjuT3RawQKcoaZbXG2wfSXOXpJ72"
+      ],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781475165,
+        "nanoseconds": 27000000
+      }
+    },
+    "BAfDWwr6UChuFN2gKBFv3DZweQJ2": {
+      "uid": "BAfDWwr6UChuFN2gKBFv3DZweQJ2",
+      "patrId": "ashokkumaryadav12@patr.in",
+      "username": "ashokkumaryadav12",
+      "displayName": "Ashok Kumar Yadav",
+      "bio": "",
+      "profilePhotoUrl": "https://api.dicebear.com/7.x/pixel-art/svg?seed=default",
+      "followersCount": 0,
+      "followingCount": 0,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [],
+      "followers": [],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781692886,
+        "nanoseconds": 184000000
+      }
+    },
+    "ashokkumaryadav12@patr.in": {
+      "uid": "BAfDWwr6UChuFN2gKBFv3DZweQJ2",
+      "patrId": "ashokkumaryadav12@patr.in",
+      "username": "ashokkumaryadav12",
+      "displayName": "Ashok Kumar Yadav",
+      "bio": "",
+      "profilePhotoUrl": "https://api.dicebear.com/7.x/pixel-art/svg?seed=default",
+      "followersCount": 0,
+      "followingCount": 0,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [],
+      "followers": [],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781692886,
+        "nanoseconds": 184000000
+      }
+    },
+    "DUEEuGM2OSavRPRIvQcyRIieGC13": {
+      "uid": "DUEEuGM2OSavRPRIvQcyRIieGC13",
+      "patrId": "arpitsinghyadav1432@patr.in",
+      "username": "arpitsinghyadav1432",
+      "displayName": "Arpit Singh Yadav",
+      "bio": "",
+      "profilePhotoUrl": "https://api.dicebear.com/7.x/pixel-art/svg?seed=default",
+      "followersCount": 0,
+      "followingCount": 0,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [],
+      "followers": [],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781695826,
+        "nanoseconds": 519000000
+      }
+    },
+    "arpitsinghyadav1432@patr.in": {
+      "uid": "DUEEuGM2OSavRPRIvQcyRIieGC13",
+      "patrId": "arpitsinghyadav1432@patr.in",
+      "username": "arpitsinghyadav1432",
+      "displayName": "Arpit Singh Yadav",
+      "bio": "",
+      "profilePhotoUrl": "https://api.dicebear.com/7.x/pixel-art/svg?seed=default",
+      "followersCount": 0,
+      "followingCount": 0,
+      "postsCount": 0,
+      "isPrivate": false,
+      "following": [],
+      "followers": [],
+      "createdAt": {
+        "type": "firestore/timestamp/1.0",
+        "seconds": 1781695826,
+        "nanoseconds": 519000000
+      }
+    }
+  },
+  "posts": [],
+  "stories": [],
+  "chats": [
+    {
+      "chatId": "chat-70bun98",
+      "participants": [
+        "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
+        "sjuT3RawQKcoaZbXG2wfSXOXpJ72"
+      ],
+      "lastMessage": "Chat cleared.",
+      "updatedAt": "2026-06-17T19:17:54.945Z",
+      "unreadBy": []
+    }
+  ],
+  "messages": {
+    "chat-70bun98": []
+  },
+  "notifications": [
+    {
+      "notificationId": "notif-5mis8b4",
+      "uid": "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
+      "senderId": "sjuT3RawQKcoaZbXG2wfSXOXpJ72",
+      "senderUsername": "arpitsinghyadav18",
+      "type": "follow",
+      "details": "started following you",
+      "createdAt": "2026-06-17T16:51:33.512Z",
+      "read": true
+    },
+    {
+      "notificationId": "notif-2izthyq",
+      "uid": "sjuT3RawQKcoaZbXG2wfSXOXpJ72",
+      "senderId": "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
+      "senderUsername": "akshitsinghyadav24",
+      "type": "follow",
+      "details": "started following you",
+      "createdAt": "2026-06-17T14:29:54.835Z",
+      "read": true
+    }
+  ]
+}
