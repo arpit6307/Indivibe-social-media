@@ -49,6 +49,10 @@ export default function FeedTab({
   const activeStoryAudioRef = useRef<HTMLAudioElement | null>(null);
   const storyAudioTimerRef = useRef<NodeJS.Timeout | null>(null);
   const activeStoryVideoRef = useRef<HTMLVideoElement | null>(null);
+  const lastSyncedRef = useRef<{ storyId: string | null; paused: boolean }>({
+    storyId: null,
+    paused: false
+  });
 
 
   const addToast = useUIStore((state) => state.addToast);
@@ -98,6 +102,7 @@ export default function FeedTab({
         storyAudioTimerRef.current = null;
       }
       setIsVideoBuffering(false);
+      lastSyncedRef.current = { storyId: null, paused: false };
       return;
     }
 
@@ -110,6 +115,18 @@ export default function FeedTab({
     }
 
     const story = group[index];
+
+    // Avoid duplicate playback operations to prevent interruptions and AbortErrors
+    const isSameStory = lastSyncedRef.current.storyId === story.storyId;
+    const isSamePaused = lastSyncedRef.current.paused === paused;
+    if (isSameStory && isSamePaused) {
+      return;
+    }
+
+    lastSyncedRef.current = {
+      storyId: story.storyId,
+      paused: paused
+    };
 
     // Set initial duration for this slide
     if (story.audioTrack) {
@@ -927,7 +944,13 @@ export default function FeedTab({
       </div>
 
       {/* STORY VIEWER MODAL PLAYER */}
-      <div className={`fixed inset-0 z-50 bg-pure-black flex flex-col items-center justify-center p-4 select-none ${activeStoryGroup ? 'flex' : 'hidden'}`}>
+      <div 
+        className={`fixed inset-0 bg-pure-black flex flex-col items-center justify-center p-4 select-none transition-all duration-300 ${
+          activeStoryGroup 
+            ? 'opacity-100 pointer-events-auto z-50 flex' 
+            : 'opacity-0 pointer-events-none z-[-10] flex'
+        }`}
+      >
         <div className="w-full max-w-md bg-pure-black rounded-lg overflow-hidden h-[90vh] flex flex-col relative border-4 border-white shadow-[8px_8px_0px_#111]">
           
           {/* Slide progress bars */}
@@ -1067,7 +1090,7 @@ export default function FeedTab({
             />
             {activeStoryGroup?.[activeStoryIndex]?.mediaType !== 'video' && activeStoryGroup?.[activeStoryIndex]?.mediaUrl && (
               <img
-                src={activeStoryGroup[activeStoryIndex].mediaUrl}
+                src={activeStoryGroup?.[activeStoryIndex]?.mediaUrl}
                 alt="Story Media"
                 className="w-full h-full object-contain"
               />
@@ -1077,20 +1100,20 @@ export default function FeedTab({
             {activeStoryGroup?.[activeStoryIndex]?.caption?.trim() && (
               <div 
                 style={{ 
-                  left: `${activeStoryGroup[activeStoryIndex].textPosition?.x ?? 50}%`, 
-                  top: `${activeStoryGroup[activeStoryIndex].textPosition?.y ?? 45}%`, 
+                  left: `${activeStoryGroup?.[activeStoryIndex]?.textPosition?.x ?? 50}%`, 
+                  top: `${activeStoryGroup?.[activeStoryIndex]?.textPosition?.y ?? 45}%`, 
                   transform: 'translate(-50%, -50%)',
                   position: 'absolute'
                 }}
                 className="max-w-[80%] text-center z-30 pointer-events-none"
               >
                 <span 
-                  style={{ color: activeStoryGroup[activeStoryIndex].textColor ?? '#ffffff' }}
+                  style={{ color: activeStoryGroup?.[activeStoryIndex]?.textColor ?? '#ffffff' }}
                   className={`px-4 py-2 text-sm md:text-lg font-bold block rounded-xl break-words leading-relaxed select-none ${
-                    activeStoryGroup[activeStoryIndex].textBg !== false ? 'bg-pure-black/65 backdrop-blur-xs brutal-border text-white' : ''
+                    activeStoryGroup?.[activeStoryIndex]?.textBg !== false ? 'bg-pure-black/65 backdrop-blur-xs brutal-border text-white' : ''
                   }`}
                 >
-                  {activeStoryGroup[activeStoryIndex].caption}
+                  {activeStoryGroup?.[activeStoryIndex]?.caption}
                 </span>
               </div>
             )}
@@ -1105,10 +1128,10 @@ export default function FeedTab({
                   <Music className="w-3.5 h-3.5 text-pure-black fill-current animate-[spin_4s_linear_infinite]" />
                   <div className="min-w-0 flex flex-col text-left">
                     <span className="font-display text-[9px] uppercase text-pure-black truncate leading-none font-bold">
-                      {activeStoryGroup[activeStoryIndex].audioTrack.title}
+                      {activeStoryGroup?.[activeStoryIndex]?.audioTrack?.title}
                     </span>
                     <span className="text-[7px] font-mono text-pure-black/70 uppercase truncate mt-0.5 font-extrabold">
-                      {activeStoryGroup[activeStoryIndex].audioTrack.artist}
+                      {activeStoryGroup?.[activeStoryIndex]?.audioTrack?.artist}
                     </span>
                   </div>
                 </div>
@@ -1142,7 +1165,7 @@ export default function FeedTab({
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-pure-black/70 hover:bg-pure-black border border-white/25 text-white rounded text-xs font-bold transition-all cursor-pointer shadow-[2px_2px_0px_rgba(255,255,255,0.25)] active:translate-x-0.5 active:translate-y-0.5"
                 >
                   <Eye className="w-3.5 h-3.5 text-white" />
-                  <span>{(activeStoryGroup[activeStoryIndex] as any).viewers?.length || 0} Viewers</span>
+                  <span>{(activeStoryGroup?.[activeStoryIndex] as any)?.viewers?.length || 0} Viewers</span>
                 </button>
               </div>
             )}
@@ -1163,7 +1186,7 @@ export default function FeedTab({
             <div className="flex justify-between items-center border-b-2 border-pure-black pb-3 mb-4">
               <h4 className="font-display text-sm uppercase flex items-center gap-1.5">
                 <Eye className="w-4 h-4 text-pure-black" />
-                Story Viewers ({(activeStoryGroup[activeStoryIndex] as any).viewers?.length || 0})
+                Story Viewers ({(activeStoryGroup?.[activeStoryIndex] as any)?.viewers?.length || 0})
               </h4>
               <button 
                 onClick={() => {
@@ -1177,12 +1200,12 @@ export default function FeedTab({
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {!(activeStoryGroup[activeStoryIndex] as any).viewers || (activeStoryGroup[activeStoryIndex] as any).viewers.length === 0 ? (
+              {!(activeStoryGroup?.[activeStoryIndex] as any)?.viewers || (activeStoryGroup?.[activeStoryIndex] as any)?.viewers.length === 0 ? (
                 <p className="text-center py-6 text-xs font-bold text-mid-gray uppercase">
                   No viewers yet.
                 </p>
               ) : (
-                ((activeStoryGroup[activeStoryIndex] as any).viewers).map((viewer: any) => (
+                ((activeStoryGroup?.[activeStoryIndex] as any)?.viewers || []).map((viewer: any) => (
                   <div key={viewer.uid} className="flex items-center justify-between bg-light-gray/40 brutal-border p-2 rounded">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full overflow-hidden brutal-border bg-white">
