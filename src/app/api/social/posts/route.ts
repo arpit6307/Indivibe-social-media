@@ -97,9 +97,12 @@ export async function POST(request: Request) {
       ...(audioTrack ? { audioTrack } : {})
     };
 
+    let postId = '';
+
     if (!isMockFirebase) {
       try {
         const docRef = await addDoc(collection(db, 'posts'), newPost);
+        postId = docRef.id;
         
         // Update posts count for user in Firestore
         try {
@@ -116,29 +119,90 @@ export async function POST(request: Request) {
         } catch (uErr) {
           console.error("Failed to update user post count in Firestore:", uErr);
         }
-
-        return NextResponse.json({ ...newPost, postId: docRef.id });
       } catch (firestoreErr) {
         console.warn("Firestore create post failed, falling back to local storage:", firestoreErr);
       }
     }
 
-    // Fallback to local server db-mock.json
     const globalStore = globalThis as any;
-    const posts = globalStore.posts || [];
-    const postId = `post-${Math.random().toString(36).substring(2, 9)}`;
-    const postWithId = { ...newPost, postId };
-    
-    posts.unshift(postWithId);
-    globalStore.posts = posts;
 
-    // Update posts count for user
-    const profiles = globalStore.registeredUserProfiles || new Map();
-    // Search profile by uid
-    for (const [email, profile] of profiles.entries()) {
-      if (profile.uid === uid) {
-        profile.postsCount = (profile.postsCount || 0) + 1;
-        profiles.set(email, profile);
+    if (!postId) {
+      // Fallback to local server db-mock.json
+      const posts = globalStore.posts || [];
+      postId = `post-${Math.random().toString(36).substring(2, 9)}`;
+      const postWithId = { ...newPost, postId };
+      
+      posts.unshift(postWithId);
+      globalStore.posts = posts;
+
+      // Update posts count for user
+      const profiles = globalStore.registeredUserProfiles || new Map();
+      for (const [email, profile] of profiles.entries()) {
+        if (profile.uid === uid) {
+          profile.postsCount = (profile.postsCount || 0) + 1;
+          profiles.set(email, profile);
+        }
+      }
+    }
+
+    const postWithId = { ...newPost, postId };
+
+    // Handle mentions in caption
+    if (caption && caption.includes('@')) {
+      const mentions = caption.match(/@[a-zA-Z0-9_]+/g) || [];
+      const uniqueMentions = Array.from(new Set(mentions.map((m: string) => m.substring(1).toLowerCase())));
+      
+      const profiles = globalStore.registeredUserProfiles || new Map();
+      
+      for (const mUsername of uniqueMentions) {
+        // Find target user by username
+        let targetUser: any = null;
+        for (const p of profiles.values() as any) {
+          if (p.username?.toLowerCase() === mUsername) {
+            targetUser = p;
+            break;
+          }
+        }
+        
+        if (targetUser && targetUser.uid && targetUser.uid !== uid) {
+          const notifId = `notif-${Math.random().toString(36).substring(2, 9)}`;
+          const mentionNotif = {
+            notificationId: notifId,
+            uid: targetUser.uid,
+            senderId: uid,
+            senderUsername: username,
+            senderProfilePhotoUrl: profilePhotoUrl || '',
+            type: 'post_mention',
+            details: 'mentioned you in their post',
+            createdAt: new Date().toISOString(),
+            read: false,
+            storyMediaUrl: mediaUrl,
+            storyAudioTrack: audioTrack || null
+          };
+          
+          if (!isMockFirebase) {
+            try {
+              await addDoc(collection(db, 'notifications'), {
+                uid: targetUser.uid,
+                senderId: uid,
+                senderUsername: username,
+                senderProfilePhotoUrl: profilePhotoUrl || '',
+                type: 'post_mention',
+                details: 'mentioned you in their post',
+                createdAt: mentionNotif.createdAt,
+                read: false,
+                storyMediaUrl: mediaUrl,
+                storyAudioTrack: audioTrack || null
+              });
+            } catch (firestoreErr) {
+              console.warn("Failed to save post mention notification to Firestore:", firestoreErr);
+            }
+          }
+          
+          const notifications = globalStore.notifications || [];
+          notifications.unshift(mentionNotif);
+          globalStore.notifications = notifications;
+        }
       }
     }
 

@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   try {
     syncGlobalStore();
     const body = await request.json();
-    const { uid, username, profilePhotoUrl, mediaUrl, mediaType, audioTrack, audience, caption } = body;
+    const { uid, username, profilePhotoUrl, mediaUrl, mediaType, audioTrack, audience, caption, textPosition, textColor, textBg } = body;
 
     if (!uid || !username || !mediaUrl) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -114,6 +114,9 @@ export async function POST(request: Request) {
       expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(), // 24 hours expiry
       audience: audience || 'public',
       caption: caption || '',
+      textPosition: textPosition || null,
+      textColor: textColor || '#ffffff',
+      textBg: textBg !== undefined ? textBg : true,
       ...(audioTrack ? { audioTrack } : {})
     };
 

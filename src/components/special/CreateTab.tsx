@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, FlipHorizontal, Image as ImageIcon, Zap, ZapOff, X, Send, Type, Undo, AlertCircle, Music, Upload } from 'lucide-react';
+import { Camera, FlipHorizontal, Image as ImageIcon, Zap, ZapOff, X, Send, Type, Undo, AlertCircle, Music, Upload, Video, Play, Pause, VolumeX, Volume2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useUIStore } from '@/store/uiStore';
 import { socialService } from '@/lib/socialService';
 import { SongSelectorModal } from '@/components/ui/SongSelectorModal';
+import { MentionAutocomplete } from '@/components/ui/MentionAutocomplete';
 
 interface CreateTabProps {
   currentUserId: string;
@@ -24,14 +25,24 @@ export default function CreateTab({
   const addToast = useUIStore((state) => state.addToast);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const overlayInputRef = useRef<HTMLInputElement>(null);
+  const captionRef = useRef<HTMLTextAreaElement>(null);
 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const [flashOn, setFlashOn] = useState(false);
   const [showFlashOverlay, setShowFlashOverlay] = useState(false);
   
+  // Camera Mode: photo vs video
+  const [cameraMode, setCameraMode] = useState<'photo' | 'video'>('photo');
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+
   // Capture States
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedVideo, setCapturedVideo] = useState<string | null>(null);
+  const [capturedVideoBlob, setCapturedVideoBlob] = useState<Blob | null>(null);
   const [uploadType, setUploadType] = useState<'post' | 'story'>('post');
   const [isUploading, setIsUploading] = useState(false);
   const [cameraError, setCameraError] = useState(false);
@@ -40,14 +51,23 @@ export default function CreateTab({
   // Music attachment
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [isMusicSelectorOpen, setIsMusicSelectorOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
   // Caption (Post only)
   const [caption, setCaption] = useState('');
+  const [captionCursorPos, setCaptionCursorPos] = useState(0);
 
   // Text Overlay state
   const [overlayText, setOverlayText] = useState('');
   const [textColor, setTextColor] = useState('#ffffff');
   const [textBg, setTextBg] = useState(true);
+  const [textPosition, setTextPosition] = useState({ x: 50, y: 45 }); // Percentages
+  const [overlayCursorPos, setOverlayCursorPos] = useState(0);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Start Camera
   const startCamera = async () => {
@@ -63,7 +83,7 @@ export default function CreateTab({
           width: { ideal: 1080 },
           height: { ideal: 1920 }
         },
-        audio: false
+        audio: cameraMode === 'video' ? true : false
       });
       
       setStream(newStream);
@@ -86,13 +106,52 @@ export default function CreateTab({
 
   // Lifecycle stream hook
   useEffect(() => {
-    if (!capturedImage && !cameraError) {
+    if (!capturedImage && !capturedVideo && !cameraError) {
       startCamera();
     } else {
       stopCamera();
     }
     return () => stopCamera();
-  }, [facingMode, capturedImage, cameraError]);
+  }, [facingMode, capturedImage, capturedVideo, cameraError, cameraMode]);
+
+  // Selected song background preview playing
+  useEffect(() => {
+    if (selectedSong && (capturedImage || capturedVideo)) {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+      }
+      const audio = new Audio(selectedSong.audioUrl);
+      audio.currentTime = selectedSong.startTime;
+      audio.play().catch(e => console.warn(e));
+      previewAudioRef.current = audio;
+
+      const endThreshold = selectedSong.startTime + selectedSong.duration;
+      if (previewTimerRef.current) clearInterval(previewTimerRef.current);
+      previewTimerRef.current = setInterval(() => {
+        if (audio.currentTime >= endThreshold || audio.ended) {
+          audio.currentTime = selectedSong.startTime;
+        }
+      }, 100);
+    } else {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current = null;
+      }
+      if (previewTimerRef.current) {
+        clearInterval(previewTimerRef.current);
+        previewTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+      }
+      if (previewTimerRef.current) {
+        clearInterval(previewTimerRef.current);
+      }
+    };
+  }, [selectedSong, capturedImage, capturedVideo]);
 
   // Gallery Uploader select
   const handleGalleryClick = () => {
@@ -102,13 +161,23 @@ export default function CreateTab({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        addToast("File size too large. Max is 10MB.", "error");
+      if (file.size > 15 * 1024 * 1024) {
+        addToast("File size too large. Max is 15MB.", "error");
         return;
       }
+
+      const isVideoFile = file.type.startsWith('video/');
       const reader = new FileReader();
       reader.onloadend = () => {
-        setCapturedImage(reader.result as string);
+        if (isVideoFile) {
+          setCapturedVideo(reader.result as string);
+          setCapturedVideoBlob(file);
+          setCapturedImage(null);
+        } else {
+          setCapturedImage(reader.result as string);
+          setCapturedVideo(null);
+          setCapturedVideoBlob(null);
+        }
         stopCamera();
       };
       reader.readAsDataURL(file);
@@ -143,6 +212,51 @@ export default function CreateTab({
       
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
       setCapturedImage(dataUrl);
+      setCapturedVideo(null);
+      setCapturedVideoBlob(null);
+      stopCamera();
+    }
+  };
+
+  // Video recording controls
+  const handleStartRecording = () => {
+    if (!stream) return;
+    recordedChunksRef.current = [];
+    let options = { mimeType: 'video/webm;codecs=vp9,opus' };
+    let recorder;
+    try {
+      recorder = new MediaRecorder(stream, options);
+    } catch (e) {
+      try {
+        recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      } catch (e2) {
+        recorder = new MediaRecorder(stream);
+      }
+    }
+    
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+
+    recorder.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/mp4' });
+      const videoUrl = URL.createObjectURL(blob);
+      setCapturedVideo(videoUrl);
+      setCapturedVideoBlob(blob);
+      setCapturedImage(null);
+    };
+
+    mediaRecorderRef.current = recorder;
+    recorder.start(10);
+    setIsRecording(true);
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
       stopCamera();
     }
   };
@@ -150,9 +264,12 @@ export default function CreateTab({
   // Retake
   const handleRetake = () => {
     setCapturedImage(null);
+    setCapturedVideo(null);
+    setCapturedVideoBlob(null);
     setSelectedSong(null);
     setCameraError(false);
     setOverlayText('');
+    setTextPosition({ x: 50, y: 45 });
   };
 
   // Compile image with text overlay and optional 9:16 crop for stories
@@ -194,8 +311,9 @@ export default function CreateTab({
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
               
-              const x = 540;
-              const y = 864;
+              // Calculate custom position on the canvas
+              const x = (textPosition.x / 100) * canvas.width;
+              const y = (textPosition.y / 100) * canvas.height;
               const padding = fontSize * 0.5;
               
               const metrics = ctx.measureText(overlayText);
@@ -245,8 +363,8 @@ export default function CreateTab({
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
               
-              const x = canvas.width / 2;
-              const y = canvas.height * 0.45;
+              const x = (textPosition.x / 100) * canvas.width;
+              const y = (textPosition.y / 100) * canvas.height;
               const padding = fontSize * 0.5;
               
               const metrics = ctx.measureText(overlayText);
@@ -288,12 +406,22 @@ export default function CreateTab({
     });
   };
 
+  // Convert Blob to Base64 for Cloudinary upload
+  const convertBlobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   // Submit / Publish
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!capturedImage) {
-      addToast("Please snap or select a photo first.", "error");
+    if (!capturedImage && !capturedVideoBlob) {
+      addToast("Please snap or select a photo/video first.", "error");
       return;
     }
 
@@ -301,23 +429,45 @@ export default function CreateTab({
     addToast("Uploading media to cloud space...", "info");
 
     try {
-      const compiledBase64 = await compileFinalImage();
-      let finalMediaUrl = compiledBase64;
+      let finalMediaUrl = '';
+      let mediaType: 'image' | 'video' = capturedVideoBlob ? 'video' : 'image';
 
-      // Upload to Cloudinary
-      try {
-        const response = await fetch('/api/cloudinary', {
-          method: 'POST',
-          body: JSON.stringify({ file: compiledBase64, folder: uploadType === 'story' ? 'indivibe_stories' : 'indivibe_posts' }),
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        const data = await response.json();
-        if (data.success && data.secure_url) {
-          finalMediaUrl = data.secure_url;
+      if (capturedVideoBlob) {
+        // Upload Video
+        const base64Video = await convertBlobToBase64(capturedVideoBlob);
+        try {
+          const response = await fetch('/api/cloudinary', {
+            method: 'POST',
+            body: JSON.stringify({ file: base64Video, folder: uploadType === 'story' ? 'indivibe_stories' : 'indivibe_posts' }),
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await response.json();
+          if (data.success && data.secure_url) {
+            finalMediaUrl = data.secure_url;
+          } else {
+            throw new Error(data.error || "Cloudinary failed");
+          }
+        } catch (uploadErr) {
+          console.warn("Cloudinary video upload failed, falling back to local object URL:", uploadErr);
+          finalMediaUrl = capturedVideo || '';
         }
-      } catch (uploadErr) {
-        console.warn("Cloudinary upload failed, saving locally:", uploadErr);
+      } else {
+        // Compile and Upload Image
+        const compiledBase64 = await compileFinalImage();
+        finalMediaUrl = compiledBase64;
+        try {
+          const response = await fetch('/api/cloudinary', {
+            method: 'POST',
+            body: JSON.stringify({ file: compiledBase64, folder: uploadType === 'story' ? 'indivibe_stories' : 'indivibe_posts' }),
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await response.json();
+          if (data.success && data.secure_url) {
+            finalMediaUrl = data.secure_url;
+          }
+        } catch (uploadErr) {
+          console.warn("Cloudinary image upload failed, saving locally:", uploadErr);
+        }
       }
 
       if (uploadType === 'post') {
@@ -327,7 +477,7 @@ export default function CreateTab({
           currentUserProfile?.displayName || currentUserUsername.toUpperCase(),
           currentUserProfile?.profilePhotoUrl || '',
           finalMediaUrl,
-          'image',
+          mediaType,
           caption.trim(),
           selectedSong || undefined
         );
@@ -338,19 +488,25 @@ export default function CreateTab({
           currentUserUsername,
           currentUserProfile?.profilePhotoUrl || '',
           finalMediaUrl,
-          'image',
+          mediaType,
           selectedSong || undefined,
           audience,
-          overlayText
+          overlayText,
+          textPosition,
+          textColor,
+          textBg
         );
         addToast("Story posted successfully for 24 hours!", "success");
       }
 
       // Cleanup & redirect
       setCapturedImage(null);
+      setCapturedVideo(null);
+      setCapturedVideoBlob(null);
       setSelectedSong(null);
       setCaption('');
       setOverlayText('');
+      setTextPosition({ x: 50, y: 45 });
       setIsUploading(false);
       onNavigateToTab('feed');
 
@@ -361,6 +517,62 @@ export default function CreateTab({
     }
   };
 
+  // Draggable text pointer event handlers
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setTextPosition({
+      x: Math.max(5, Math.min(95, x)),
+      y: Math.max(5, Math.min(95, y))
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch (err) {}
+    }
+  };
+
+  // Mention Autocomplete selections
+  const handleSelectMentionOverlay = (username: string, start: number, end: number) => {
+    const text = overlayText;
+    const newText = text.substring(0, start) + '@' + username + ' ' + text.substring(end);
+    setOverlayText(newText);
+    setTimeout(() => {
+      if (overlayInputRef.current) {
+        overlayInputRef.current.focus();
+        const cursor = start + username.length + 2;
+        overlayInputRef.current.setSelectionRange(cursor, cursor);
+        setOverlayCursorPos(cursor);
+      }
+    }, 10);
+  };
+
+  const handleSelectMentionCaption = (username: string, start: number, end: number) => {
+    const text = caption;
+    const newText = text.substring(0, start) + '@' + username + ' ' + text.substring(end);
+    setCaption(newText);
+    setTimeout(() => {
+      if (captionRef.current) {
+        captionRef.current.focus();
+        const cursor = start + username.length + 2;
+        captionRef.current.setSelectionRange(cursor, cursor);
+        setCaptionCursorPos(cursor);
+      }
+    }, 10);
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-16 select-none animate-[fadeIn_0.15s_ease-out]">
       
@@ -368,7 +580,7 @@ export default function CreateTab({
       <div className="border-b-3 border-pure-black pb-4 mb-6 text-center md:text-left">
         <h2 className="font-display text-2xl uppercase">Creation Studio</h2>
         <p className="text-xs font-bold text-mid-gray uppercase tracking-wider mt-1">
-          Capture photos via live camera, trim custom background music, and post to feed or story
+          Capture photos & videos via live camera, drag text overlays, and attach soundtracks
         </p>
       </div>
 
@@ -433,14 +645,40 @@ export default function CreateTab({
           </div>
         )}
 
+        {/* Camera Feed Mode Toggle (Photo vs Video) */}
+        {!capturedImage && !capturedVideo && !cameraError && (
+          <div className="flex justify-center mb-2">
+            <div className="bg-white brutal-border border-2 border-pure-black p-1 flex gap-1 rounded-full shadow-[2px_2px_0px_#111]">
+              <button
+                type="button"
+                onClick={() => { setCameraMode('photo'); }}
+                className={`px-4 py-1 rounded-full text-[10px] font-display uppercase transition-all ${
+                  cameraMode === 'photo' ? 'bg-brutal-yellow text-pure-black font-bold' : 'text-mid-gray'
+                }`}
+              >
+                Photo
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCameraMode('video'); }}
+                className={`px-4 py-1 rounded-full text-[10px] font-display uppercase transition-all ${
+                  cameraMode === 'video' ? 'bg-error-red text-white font-bold' : 'text-mid-gray'
+                }`}
+              >
+                Video Record
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Viewport Frame */}
         <div className={`p-0 bg-[#111] overflow-hidden flex flex-col items-center justify-center relative ${
-          !capturedImage && !cameraError
+          !capturedImage && !capturedVideo && !cameraError
             ? 'fixed inset-0 z-50 md:relative md:inset-auto md:z-0 md:h-[450px] md:min-h-0 md:brutal-border md:border-3 md:shadow-[4px_4px_0px_#111] md:rounded-lg' 
             : 'w-full h-[350px] md:h-[450px] brutal-border border-3 shadow-[4px_4px_0px_#111] rounded-lg'
         }`}>
           
-          {!capturedImage ? (
+          {!capturedImage && !capturedVideo ? (
             /* CAMERA STATE */
             !cameraError ? (
               <div className="w-full h-full min-h-[350px] relative flex items-center justify-center">
@@ -448,6 +686,7 @@ export default function CreateTab({
                   ref={videoRef}
                   autoPlay
                   playsInline
+                  muted
                   className={`w-full h-full min-h-[350px] object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
                 />
 
@@ -493,14 +732,26 @@ export default function CreateTab({
                     <ImageIcon className="w-5 h-5" />
                   </button>
 
-                  {/* Shutter */}
-                  <button
-                    type="button"
-                    onClick={handleCapture}
-                    className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center bg-transparent hover:scale-105 active:scale-95 transition-transform cursor-pointer"
-                  >
-                    <div className="w-full h-full rounded-full bg-white"></div>
-                  </button>
+                  {/* Shutter / Record Trigger */}
+                  {cameraMode === 'photo' ? (
+                    <button
+                      type="button"
+                      onClick={handleCapture}
+                      className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center bg-transparent hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+                    >
+                      <div className="w-full h-full rounded-full bg-white"></div>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={isRecording ? handleStopRecording : handleStartRecording}
+                      className={`w-16 h-16 rounded-full border-4 border-white flex items-center justify-center bg-transparent hover:scale-105 active:scale-95 transition-transform cursor-pointer ${
+                        isRecording ? 'animate-pulse border-error-red' : ''
+                      }`}
+                    >
+                      <div className={`rounded-full transition-all ${isRecording ? 'w-8 h-8 bg-error-red rounded-sm' : 'w-full h-full bg-white'}`}></div>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -516,9 +767,9 @@ export default function CreateTab({
               /* CAMERA FALLBACK / ERROR UPLOAD SCREEN */
               <label className="w-full flex flex-col items-center justify-center p-10 cursor-pointer text-center group bg-white h-[350px]">
                 <Upload className="w-12 h-12 text-pure-black mb-3 group-hover:scale-110 transition-transform" />
-                <span className="font-display text-sm uppercase text-pure-black">Choose photo from library</span>
+                <span className="font-display text-sm uppercase text-pure-black">Choose file from library</span>
                 <span className="text-[10px] font-bold text-mid-gray uppercase mt-1">
-                  Camera feed unavailable. Select local picture (max 10MB)
+                  Camera feed unavailable. Select local picture/video (max 15MB)
                 </span>
                 {cameraError && (
                   <button
@@ -532,16 +783,39 @@ export default function CreateTab({
               </label>
             )
           ) : (
-            /* CAPTURED / SELECTED PREVIEW IMAGE */
-            <div className="w-full h-full relative aspect-square flex items-center justify-center bg-[#0d0d0d]">
-              <img src={capturedImage} alt="Captured preview" className="max-h-[350px] w-full object-contain" />
+            /* CAPTURED / SELECTED PREVIEW MEDIA */
+            <div ref={containerRef} className="w-full h-full relative flex items-center justify-center bg-[#0d0d0d]">
+              {capturedVideo ? (
+                <video
+                  src={capturedVideo}
+                  autoPlay
+                  loop
+                  muted={isMuted || !!selectedSong}
+                  className="max-h-[350px] md:max-h-[450px] w-full object-contain"
+                />
+              ) : (
+                <img src={capturedImage || ''} alt="Captured preview" className="max-h-[350px] md:max-h-[450px] w-full object-contain" />
+              )}
               
-              {/* Dynamic Text Overlay Render */}
+              {/* Dynamic Drag/Drop Text Overlay Render */}
               {overlayText.trim() && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[80%] text-center">
+                <div 
+                  style={{ 
+                    left: `${textPosition.x}%`, 
+                    top: `${textPosition.y}%`, 
+                    transform: 'translate(-50%, -50%)',
+                    position: 'absolute',
+                    cursor: 'move',
+                    touchAction: 'none'
+                  }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  className="max-w-[80%] text-center z-20"
+                >
                   <span 
                     style={{ color: textColor }}
-                    className={`px-4 py-2 text-sm md:text-lg font-bold block rounded-xl break-words leading-relaxed ${
+                    className={`px-4 py-2 text-sm md:text-lg font-bold block rounded-xl break-words leading-relaxed select-none ${
                       textBg ? 'bg-pure-black/65 backdrop-blur-xs brutal-border text-white' : ''
                     }`}
                   >
@@ -553,7 +827,7 @@ export default function CreateTab({
               <button
                 type="button"
                 onClick={handleRetake}
-                className="absolute top-4 right-4 bg-error-red text-white p-2 rounded-md brutal-border border-2 shadow-[2px_2px_0px_#111] hover:shadow-none hover:translate-y-0.5 font-display text-[9px] uppercase tracking-wider cursor-pointer"
+                className="absolute top-4 right-4 bg-error-red text-white p-2 rounded-md brutal-border border-2 shadow-[2px_2px_0px_#111] hover:shadow-none hover:translate-y-0.5 font-display text-[9px] uppercase tracking-wider cursor-pointer z-30"
               >
                 <Undo className="w-3.5 h-3.5 inline mr-1" /> Retake snap
               </button>
@@ -563,18 +837,18 @@ export default function CreateTab({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             onChange={handleFileChange}
             className="hidden"
           />
         </div>
 
         {/* Text Overlay Controls */}
-        {capturedImage && (
-          <div className="space-y-3 p-4 bg-white brutal-border border-2 border-pure-black shadow-[3px_3px_0px_#111] rounded-lg">
+        {(capturedImage || capturedVideo) && (
+          <div className="space-y-3 p-4 bg-white brutal-border border-2 border-pure-black shadow-[3px_3px_0px_#111] rounded-lg relative">
             <div className="flex items-center justify-between">
               <label className="text-xs font-display uppercase tracking-wider text-mid-gray flex items-center gap-1">
-                <Type className="w-4 h-4 text-pure-black" /> Text Overlay
+                <Type className="w-4 h-4 text-pure-black" /> Text Overlay (Drag to Position)
               </label>
               <button
                 type="button"
@@ -587,14 +861,30 @@ export default function CreateTab({
               </button>
             </div>
 
-            <input
-              type="text"
-              placeholder="Type overlay text (e.g. @username or #hashtag)..."
-              value={overlayText}
-              onChange={(e) => setOverlayText(e.target.value)}
-              className="w-full bg-white text-pure-black font-bold text-xs brutal-border p-2.5 rounded-lg shadow-[2px_2px_0px_#111] outline-none"
-              maxLength={60}
-            />
+            <div className="relative">
+              <input
+                ref={overlayInputRef}
+                type="text"
+                placeholder="Type overlay text (type @ to mention follows)..."
+                value={overlayText}
+                onChange={(e) => {
+                  setOverlayText(e.target.value);
+                  setOverlayCursorPos(e.target.selectionStart || 0);
+                }}
+                onKeyUp={(e) => setOverlayCursorPos((e.target as any).selectionStart || 0)}
+                onClick={(e) => setOverlayCursorPos((e.target as any).selectionStart || 0)}
+                className="w-full bg-white text-pure-black font-bold text-xs brutal-border p-2.5 rounded-lg shadow-[2px_2px_0px_#111] outline-none"
+                maxLength={60}
+              />
+              
+              <MentionAutocomplete
+                inputValue={overlayText}
+                cursorPosition={overlayCursorPos}
+                currentUserId={currentUserId}
+                onSelect={handleSelectMentionOverlay}
+                className="bottom-full mb-1 left-0"
+              />
+            </div>
 
             <div className="flex gap-2 justify-center pt-1">
               {['#ffffff', '#FFE834', '#000000', '#FF3B30', '#34C759', '#007AFF'].map((color) => (
@@ -614,8 +904,37 @@ export default function CreateTab({
           </div>
         )}
 
+        {/* Video Audio Mute Control */}
+        {capturedVideo && (
+          <div className="flex items-center gap-3 p-3 bg-white brutal-border border-2 border-pure-black shadow-[3px_3px_0px_#111] rounded-lg">
+            <span className="text-xs font-display uppercase text-pure-black tracking-wider font-bold">Video Sound:</span>
+            <div className="flex gap-2 flex-1 justify-end">
+              <button
+                type="button"
+                onClick={() => setIsMuted(!isMuted)}
+                className={`px-3 py-1.5 text-[10px] font-display uppercase tracking-wider brutal-border border rounded cursor-pointer transition-colors flex items-center gap-1 ${
+                  isMuted || selectedSong
+                    ? 'bg-error-red text-white shadow-[1.5px_1.5px_0px_#111]' 
+                    : 'bg-transparent text-mid-gray border-light-gray shadow-none'
+                }`}
+                disabled={!!selectedSong} // Automatically muted if soundtrack selected
+              >
+                {isMuted || selectedSong ? (
+                  <>
+                    <VolumeX className="w-3.5 h-3.5" /> Muted {selectedSong && '(Soundtrack Active)'}
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-3.5 h-3.5" /> Original On
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Audio Track Selector & Trim Detail Area */}
-        {capturedImage && (
+        {(capturedImage || capturedVideo) && (
           <div className="space-y-2">
             <label className="text-xs font-display uppercase tracking-wider text-mid-gray block">
               Background Soundtrack
@@ -660,16 +979,30 @@ export default function CreateTab({
         )}
 
         {/* Caption Area (Post Mode only) */}
-        {uploadType === 'post' && capturedImage && (
-          <div className="space-y-2">
+        {uploadType === 'post' && (capturedImage || capturedVideo) && (
+          <div className="space-y-2 relative">
             <label className="text-xs font-display uppercase tracking-wider text-mid-gray">
               Write a Caption
             </label>
             <textarea
-              placeholder="Tell other space travelers about this photo... (Keep it emoji-free)"
+              ref={captionRef}
+              placeholder="Tell other space travelers about this post... (Type @ to mention follows)"
               value={caption}
-              onChange={(e) => setCaption(e.target.value)}
+              onChange={(e) => {
+                setCaption(e.target.value);
+                setCaptionCursorPos(e.target.selectionStart || 0);
+              }}
+              onKeyUp={(e) => setCaptionCursorPos((e.target as any).selectionStart || 0)}
+              onClick={(e) => setCaptionCursorPos((e.target as any).selectionStart || 0)}
               className="w-full bg-white text-pure-black font-bold text-xs brutal-border p-3 rounded-lg shadow-[3px_3px_0px_#111] outline-none min-h-[80px]"
+            />
+            
+            <MentionAutocomplete
+              inputValue={caption}
+              cursorPosition={captionCursorPos}
+              currentUserId={currentUserId}
+              onSelect={handleSelectMentionCaption}
+              className="bottom-full mb-1 left-0"
             />
           </div>
         )}
@@ -685,7 +1018,7 @@ export default function CreateTab({
         {/* Submit */}
         <Button
           type="submit"
-          disabled={isUploading || !capturedImage}
+          disabled={isUploading || (!capturedImage && !capturedVideoBlob)}
           variant="primary"
           className="w-full py-3.5 text-sm font-display uppercase tracking-widest brutal-shadow-card cursor-pointer"
         >

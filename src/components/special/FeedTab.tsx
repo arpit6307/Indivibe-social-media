@@ -581,6 +581,7 @@ export default function FeedTab({
                       <video
                         src={post.mediaUrl}
                         controls
+                        muted={!!post.audioTrack}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -850,11 +851,43 @@ export default function FeedTab({
 
             {/* Story Viewer screen */}
             <div className="flex-1 bg-pure-black flex items-center justify-center relative">
-              <img
-                src={activeStoryGroup[activeStoryIndex].mediaUrl}
-                alt="Story Media"
-                className="w-full h-full object-contain"
-              />
+              {activeStoryGroup[activeStoryIndex].mediaType === 'video' ? (
+                <video
+                  src={activeStoryGroup[activeStoryIndex].mediaUrl}
+                  autoPlay
+                  loop
+                  muted={!!activeStoryGroup[activeStoryIndex].audioTrack}
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <img
+                  src={activeStoryGroup[activeStoryIndex].mediaUrl}
+                  alt="Story Media"
+                  className="w-full h-full object-contain"
+                />
+              )}
+
+              {/* Dynamic Text Overlay Render */}
+              {activeStoryGroup[activeStoryIndex].caption?.trim() && (
+                <div 
+                  style={{ 
+                    left: `${activeStoryGroup[activeStoryIndex].textPosition?.x ?? 50}%`, 
+                    top: `${activeStoryGroup[activeStoryIndex].textPosition?.y ?? 45}%`, 
+                    transform: 'translate(-50%, -50%)',
+                    position: 'absolute'
+                  }}
+                  className="max-w-[80%] text-center z-30 pointer-events-none"
+                >
+                  <span 
+                    style={{ color: activeStoryGroup[activeStoryIndex].textColor ?? '#ffffff' }}
+                    className={`px-4 py-2 text-sm md:text-lg font-bold block rounded-xl break-words leading-relaxed select-none ${
+                      activeStoryGroup[activeStoryIndex].textBg !== false ? 'bg-pure-black/65 backdrop-blur-xs brutal-border text-white' : ''
+                    }`}
+                  >
+                    {activeStoryGroup[activeStoryIndex].caption}
+                  </span>
+                </div>
+              )}
 
               {/* Blur Shield Protection against visible Screen Capture (Simulation) */}
               <div className="absolute inset-0 pointer-events-none border-[6px] border-dashed border-error-red opacity-10 animate-pulse"></div>
@@ -952,7 +985,14 @@ export default function FeedTab({
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <span className="text-xs font-extrabold uppercase text-pure-black">
+                          <span 
+                            onClick={() => {
+                              setShowViewersList(false);
+                              setActiveStoryGroup(null);
+                              onViewProfile(viewer.uid);
+                            }}
+                            className="text-xs font-extrabold uppercase text-pure-black cursor-pointer hover:underline hover:text-brutal-yellow transition-colors"
+                          >
                             @{viewer.username}
                           </span>
                         </div>

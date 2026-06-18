@@ -52,6 +52,15 @@ export interface Story {
   };
   audience?: 'public' | 'close_friends';
   caption?: string;
+  textPosition?: { x: number; y: number };
+  textColor?: string;
+  textBg?: boolean;
+  viewers?: Array<{
+    uid: string;
+    username: string;
+    profilePhotoUrl: string;
+    viewedAt: string;
+  }>;
 }
 
 export interface Message {
@@ -322,13 +331,16 @@ export const socialService = {
     mediaType: 'image' | 'video',
     audioTrack?: any,
     audience?: 'public' | 'close_friends',
-    caption?: string
+    caption?: string,
+    textPosition?: { x: number; y: number },
+    textColor?: string,
+    textBg?: boolean
   ): Promise<Story> {
     try {
       const res = await fetch(`/api/social/stories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid, username, profilePhotoUrl, mediaUrl, mediaType, audioTrack, audience, caption })
+        body: JSON.stringify({ uid, username, profilePhotoUrl, mediaUrl, mediaType, audioTrack, audience, caption, textPosition, textColor, textBg })
       });
       if (!res.ok) throw new Error("Failed to create story");
       return await res.json();

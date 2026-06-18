@@ -350,7 +350,7 @@ export function SongSelectorModal({ onSelect, onClose }: SongSelectorModalProps)
                 <input 
                   type="range" 
                   min="0" 
-                  max="15" 
+                  max="25" 
                   step="1"
                   value={startTime}
                   onChange={(e) => setStartTime(parseInt(e.target.value))}
@@ -368,7 +368,7 @@ export function SongSelectorModal({ onSelect, onClose }: SongSelectorModalProps)
                 <input 
                   type="range" 
                   min="5" 
-                  max="25" 
+                  max="45" 
                   step="1"
                   value={duration}
                   onChange={(e) => setDuration(parseInt(e.target.value))}

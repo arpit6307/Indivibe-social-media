@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Heart, MessageCircle, UserPlus, Check, UserMinus, X, Camera } from 'lucide-react';
+import { Bell, Heart, MessageCircle, UserPlus, Check, UserMinus, X, Camera, AtSign } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { socialService, Notification } from '@/lib/socialService';
@@ -205,6 +205,8 @@ export default function NotificationsTab({
         return <Check className="w-2.5 h-2.5 text-success-green" />;
       case 'story_mention':
         return <Camera className="w-2.5 h-2.5 text-[#34C759]" />;
+      case 'post_mention' as any:
+        return <AtSign className="w-2.5 h-2.5 text-brutal-yellow" />;
       default:
         return <Bell className="w-2.5 h-2.5 text-pure-black" />;
     }
