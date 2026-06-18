@@ -36,6 +36,7 @@ export default function FeedTab({
   const [storyProgress, setStoryProgress] = useState(0);
   const [storyPaused, setStoryPaused] = useState(false);
   const [showViewersList, setShowViewersList] = useState(false);
+  const [isVideoBuffering, setIsVideoBuffering] = useState(false);
 
   // Camera state
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -68,20 +69,27 @@ export default function FeedTab({
     };
   }, []);
 
-  // Stories audio autoplay & syncing
-  useEffect(() => {
-    if (activeStoryAudioRef.current) {
-      activeStoryAudioRef.current.pause();
-      activeStoryAudioRef.current = null;
-    }
-    if (storyAudioTimerRef.current) {
-      clearInterval(storyAudioTimerRef.current);
-      storyAudioTimerRef.current = null;
+  // Helper to synchronize audio & video for the story player
+  const syncStoryMedia = (group: Story[] | null, index: number, paused: boolean) => {
+    // 1. If no active story group or out of bounds, pause and clean up
+    if (!group || !group[index]) {
+      if (activeStoryVideoRef.current) {
+        activeStoryVideoRef.current.pause();
+        activeStoryVideoRef.current.src = '';
+      }
+      if (activeStoryAudioRef.current) {
+        activeStoryAudioRef.current.pause();
+        activeStoryAudioRef.current.src = '';
+      }
+      if (storyAudioTimerRef.current) {
+        clearInterval(storyAudioTimerRef.current);
+        storyAudioTimerRef.current = null;
+      }
+      setIsVideoBuffering(false);
+      return;
     }
 
-    if (!activeStoryGroup) return;
-
-    // Pause any playing feed post audio when opening stories
+    // Pause any playing feed post audio when playing stories
     if (activePostAudioRef.current) {
       activePostAudioRef.current.audio.pause();
       if (activePostAudioRef.current.timer) clearInterval(activePostAudioRef.current.timer);
@@ -89,37 +97,117 @@ export default function FeedTab({
       setPlayingPostId(null);
     }
 
-    const currentStory = activeStoryGroup[activeStoryIndex];
-    if (currentStory && currentStory.audioTrack) {
-      const track = currentStory.audioTrack;
-      const audio = new Audio(track.audioUrl);
-      audio.currentTime = track.startTime;
-      activeStoryAudioRef.current = audio;
+    const story = group[index];
 
-      if (!storyPaused) {
-        audio.play().catch(e => console.warn(e));
+    // 2. Synchronize Audio Track
+    if (typeof window !== 'undefined') {
+      if (!activeStoryAudioRef.current) {
+        activeStoryAudioRef.current = new Audio();
       }
+      const audio = activeStoryAudioRef.current;
 
-      // Loop audio segment within the story duration
-      const endTime = track.startTime + track.duration;
-      storyAudioTimerRef.current = setInterval(() => {
-        if (audio.currentTime >= endTime || audio.ended) {
-          audio.currentTime = track.startTime;
-          if (!storyPaused) {
-            audio.play().catch(e => console.warn(e));
-          }
+      if (story.audioTrack) {
+        const track = story.audioTrack;
+        const targetSrc = track.audioUrl;
+
+        // Clean up old audio timer before setting new one
+        if (storyAudioTimerRef.current) {
+          clearInterval(storyAudioTimerRef.current);
+          storyAudioTimerRef.current = null;
         }
-      }, 100);
+
+        if (audio.src !== targetSrc) {
+          audio.src = targetSrc;
+          audio.load();
+        }
+        audio.currentTime = track.startTime;
+
+        if (!paused) {
+          audio.play().catch(err => console.warn("Story audio playback blocked:", err));
+        } else {
+          audio.pause();
+        }
+
+        // Loop segment logic within the story slide duration
+        const endTime = track.startTime + track.duration;
+        storyAudioTimerRef.current = setInterval(() => {
+          if (audio.currentTime >= endTime || audio.ended) {
+            audio.currentTime = track.startTime;
+            if (!paused) {
+              audio.play().catch(e => console.warn(e));
+            }
+          }
+        }, 100);
+      } else {
+        audio.pause();
+        audio.src = '';
+        if (storyAudioTimerRef.current) {
+          clearInterval(storyAudioTimerRef.current);
+          storyAudioTimerRef.current = null;
+        }
+      }
+    }
+
+    // 3. Synchronize Video Element
+    const video = activeStoryVideoRef.current;
+    if (video) {
+      if (story.mediaType === 'video') {
+        const targetSrc = story.mediaUrl;
+        if (video.src !== targetSrc) {
+          video.src = targetSrc;
+          video.load();
+        }
+        video.muted = !!story.audioTrack; // mute if there is a custom soundtrack
+
+        setIsVideoBuffering(true); // Default to buffering until ready
+
+        if (!paused) {
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              setIsVideoBuffering(false);
+            }).catch(err => {
+              console.warn("Autoplay block detected on story video, forcing mute:", err);
+              video.muted = true;
+              video.play().then(() => {
+                setIsVideoBuffering(false);
+              }).catch(e => {
+                console.error("Video play failed completely:", e);
+                setIsVideoBuffering(false);
+              });
+            });
+          } else {
+            setIsVideoBuffering(false);
+          }
+        } else {
+          video.pause();
+          setIsVideoBuffering(false);
+        }
+      } else {
+        video.pause();
+        video.src = '';
+        setIsVideoBuffering(false);
+      }
+    }
+  };
+
+  // Stories audio autoplay & syncing fallback
+  useEffect(() => {
+    if (activeStoryGroup) {
+      syncStoryMedia(activeStoryGroup, activeStoryIndex, storyPaused);
     }
 
     return () => {
-      if (activeStoryAudioRef.current) {
-        activeStoryAudioRef.current.pause();
-        activeStoryAudioRef.current = null;
-      }
-      if (storyAudioTimerRef.current) {
-        clearInterval(storyAudioTimerRef.current);
-        storyAudioTimerRef.current = null;
+      // If closing stories player completely
+      if (!activeStoryGroup) {
+        if (activeStoryAudioRef.current) {
+          activeStoryAudioRef.current.pause();
+          activeStoryAudioRef.current.src = '';
+        }
+        if (storyAudioTimerRef.current) {
+          clearInterval(storyAudioTimerRef.current);
+          storyAudioTimerRef.current = null;
+        }
       }
     };
   }, [activeStoryGroup, activeStoryIndex, storyPaused]);
@@ -346,7 +434,7 @@ export default function FeedTab({
       return;
     }
 
-    if (storyPaused) {
+    if (storyPaused || isVideoBuffering) {
       if (storyTimerRef.current) clearInterval(storyTimerRef.current);
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
       return;
@@ -374,50 +462,34 @@ export default function FeedTab({
       if (storyTimerRef.current) clearInterval(storyTimerRef.current);
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
     };
-  }, [activeStoryGroup, activeStoryIndex, storyPaused]);
-
-  // Sync HTML5 video play/pause and handle mobile/browser autoplay blocks
-  useEffect(() => {
-    const video = activeStoryVideoRef.current;
-    if (!video) return;
-
-    if (storyPaused) {
-      video.pause();
-    } else {
-      // playsInline is already set on the element. Call play() explicitly.
-      const playPromise = video.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(err => {
-          console.warn("Autoplay block detected, muting to force play", err);
-          video.muted = true;
-          video.play().catch(e => console.error("Video play failed completely:", e));
-        });
-      }
-    }
-  }, [storyPaused, activeStoryIndex, activeStoryGroup]);
-
+  }, [activeStoryGroup, activeStoryIndex, storyPaused, isVideoBuffering]);
 
   const handleNextStory = () => {
     if (!activeStoryGroup) return;
     if (activeStoryIndex < activeStoryGroup.length - 1) {
-      setActiveStoryIndex(prev => prev + 1);
+      const nextIndex = activeStoryIndex + 1;
+      setActiveStoryIndex(nextIndex);
       setStoryProgress(0);
+      // Synchronously trigger play for next slide
+      syncStoryMedia(activeStoryGroup, nextIndex, storyPaused);
     } else {
       // Finished all stories in this group
-      setActiveStoryGroup(null);
-      setActiveStoryIndex(0);
-      setStoryProgress(0);
+      closeStoryViewer();
     }
   };
 
   const handlePrevStory = () => {
     if (!activeStoryGroup) return;
     if (activeStoryIndex > 0) {
-      setActiveStoryIndex(prev => prev - 1);
+      const prevIndex = activeStoryIndex - 1;
+      setActiveStoryIndex(prevIndex);
       setStoryProgress(0);
+      // Synchronously trigger play for previous slide
+      syncStoryMedia(activeStoryGroup, prevIndex, storyPaused);
     } else {
       setActiveStoryIndex(0);
       setStoryProgress(0);
+      syncStoryMedia(activeStoryGroup, 0, storyPaused);
     }
   };
 
@@ -426,6 +498,22 @@ export default function FeedTab({
     setActiveStoryIndex(0);
     setStoryProgress(0);
     setStoryPaused(false);
+    // Synchronously trigger playback to capture user click gesture!
+    syncStoryMedia(userStories, 0, false);
+  };
+
+  const closeStoryViewer = () => {
+    setActiveStoryGroup(null);
+    setActiveStoryIndex(0);
+    setStoryProgress(0);
+    setIsVideoBuffering(false);
+    syncStoryMedia(null, 0, false);
+  };
+
+  const toggleStoryPause = () => {
+    const nextPaused = !storyPaused;
+    setStoryPaused(nextPaused);
+    syncStoryMedia(activeStoryGroup, activeStoryIndex, nextPaused);
   };
 
   return (
@@ -776,277 +864,277 @@ export default function FeedTab({
       </div>
 
       {/* STORY VIEWER MODAL PLAYER */}
-      {activeStoryGroup && (
-        <div className="fixed inset-0 z-50 bg-pure-black flex flex-col items-center justify-center p-4 select-none">
-          <div className="w-full max-w-md bg-pure-black rounded-lg overflow-hidden h-[90vh] flex flex-col relative border-4 border-white shadow-[8px_8px_0px_#111]">
-            
-            {/* Slide progress bars */}
-            <div className="absolute top-3 left-3 right-3 z-30 flex gap-1.5">
-              {activeStoryGroup.map((story, idx) => (
-                <div key={story.storyId} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-white transition-all ease-linear"
-                    style={{
-                      width: idx < activeStoryIndex ? '100%' : idx === activeStoryIndex ? `${storyProgress}%` : '0%',
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Story Header */}
-            <div className="absolute top-6 left-4 right-4 z-30 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-white">
-                <div className="w-9 h-9 rounded-full overflow-hidden brutal-border border-white bg-white">
-                  <img
-                    src={activeStoryGroup[activeStoryIndex].profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=default'}
-                    alt="User"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div>
-                  <span className="font-display text-sm uppercase leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                    {activeStoryGroup[activeStoryIndex].username}
-                  </span>
-                  <span className="block text-[8px] font-bold text-light-gray drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                    {activeStoryGroup[activeStoryIndex].audience === 'close_friends' ? (
-                      <span className="text-[#34C759] flex items-center gap-0.5">⭐ Close Friends Only</span>
-                    ) : (
-                      'Active Story'
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-2.5">
-                {activeStoryGroup[activeStoryIndex].uid === currentUserId && (
-                  <>
-                    <button
-                      onClick={() => {
-                        setActiveStoryGroup(null);
-                        setIsCameraOpen(true);
-                      }}
-                      className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-display uppercase tracking-wider text-pure-black bg-brutal-yellow brutal-border border rounded hover:scale-105 active:scale-95 transition-transform"
-                      title="Add another story slide"
-                    >
-                      <Plus className="w-3 h-3 stroke-[3]" /> Add Slide
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (confirm("Are you sure you want to delete this story?")) {
-                          setStoryPaused(true);
-                          const currentStory = activeStoryGroup[activeStoryIndex];
-                          const success = await socialService.deleteStory(currentStory.storyId);
-                          if (success) {
-                            addToast("Story deleted!", "success");
-                            // Filter out deleted story from active group
-                            const updatedGroup = activeStoryGroup.filter(s => s.storyId !== currentStory.storyId);
-                            if (updatedGroup.length === 0) {
-                              // Close player
-                              setActiveStoryGroup(null);
-                              setActiveStoryIndex(0);
-                            } else {
-                              // If we deleted the last slide, go back one
-                              const nextIndex = activeStoryIndex >= updatedGroup.length ? updatedGroup.length - 1 : activeStoryIndex;
-                              setActiveStoryGroup(updatedGroup);
-                              setActiveStoryIndex(nextIndex);
-                              setStoryProgress(0);
-                              setStoryPaused(false);
-                            }
-                            loadFeedData();
-                          } else {
-                            addToast("Failed to delete story", "error");
-                            setStoryPaused(false);
-                          }
-                        }
-                      }}
-                      className="p-1 text-[#FF3B30] bg-pure-black/35 rounded hover:bg-[#FF3B30]/10 focus:outline-none flex items-center justify-center"
-                      title="Delete story"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
-
-                <button
-                  onClick={() => setStoryPaused(!storyPaused)}
-                  className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
-                  aria-label={storyPaused ? "Resume" : "Pause"}
-                >
-                  {storyPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={() => setActiveStoryGroup(null)}
-                  className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
-                  aria-label="Close stories player"
-                >
-                  <X className="w-4 h-4 stroke-[2.5]" />
-                </button>
-              </div>
-            </div>
-
-            {/* Story Viewer screen */}
-            <div className="flex-1 bg-pure-black flex items-center justify-center relative">
-              {activeStoryGroup[activeStoryIndex].mediaType === 'video' ? (
-                <video
-                  ref={activeStoryVideoRef}
-                  src={activeStoryGroup[activeStoryIndex].mediaUrl}
-                  autoPlay
-                  loop
-                  playsInline
-                  webkit-playsinline="true"
-                  muted={!!activeStoryGroup[activeStoryIndex].audioTrack}
-                  className="w-full h-full object-contain"
-                />
-
-              ) : (
-                <img
-                  src={activeStoryGroup[activeStoryIndex].mediaUrl}
-                  alt="Story Media"
-                  className="w-full h-full object-contain"
-                />
-              )}
-
-              {/* Dynamic Text Overlay Render */}
-              {activeStoryGroup[activeStoryIndex].caption?.trim() && (
+      <div className={`fixed inset-0 z-50 bg-pure-black flex flex-col items-center justify-center p-4 select-none ${activeStoryGroup ? 'flex' : 'hidden'}`}>
+        <div className="w-full max-w-md bg-pure-black rounded-lg overflow-hidden h-[90vh] flex flex-col relative border-4 border-white shadow-[8px_8px_0px_#111]">
+          
+          {/* Slide progress bars */}
+          <div className="absolute top-3 left-3 right-3 z-30 flex gap-1.5">
+            {(activeStoryGroup || []).map((story, idx) => (
+              <div key={story.storyId} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
                 <div 
-                  style={{ 
-                    left: `${activeStoryGroup[activeStoryIndex].textPosition?.x ?? 50}%`, 
-                    top: `${activeStoryGroup[activeStoryIndex].textPosition?.y ?? 45}%`, 
-                    transform: 'translate(-50%, -50%)',
-                    position: 'absolute'
+                  className="h-full bg-white transition-all ease-linear"
+                  style={{
+                    width: idx < activeStoryIndex ? '100%' : idx === activeStoryIndex ? `${storyProgress}%` : '0%',
                   }}
-                  className="max-w-[80%] text-center z-30 pointer-events-none"
-                >
-                  <span 
-                    style={{ color: activeStoryGroup[activeStoryIndex].textColor ?? '#ffffff' }}
-                    className={`px-4 py-2 text-sm md:text-lg font-bold block rounded-xl break-words leading-relaxed select-none ${
-                      activeStoryGroup[activeStoryIndex].textBg !== false ? 'bg-pure-black/65 backdrop-blur-xs brutal-border text-white' : ''
-                    }`}
-                  >
-                    {activeStoryGroup[activeStoryIndex].caption}
-                  </span>
-                </div>
-              )}
-
-              {/* Blur Shield Protection against visible Screen Capture (Simulation) */}
-              <div className="absolute inset-0 pointer-events-none border-[6px] border-dashed border-error-red opacity-10 animate-pulse"></div>
-
-              {/* Floating Music Sticker */}
-              {activeStoryGroup[activeStoryIndex].audioTrack && (
-                <div className="absolute bottom-16 right-4 z-30 animate-[bounce_2s_infinite] max-w-[70%]">
-                  <div className="px-3 py-1.5 bg-brutal-yellow brutal-border border-2 border-pure-black shadow-[3px_3px_0px_#111] rounded flex items-center gap-2 select-none">
-                    <Music className="w-3.5 h-3.5 text-pure-black fill-current animate-[spin_4s_linear_infinite]" />
-                    <div className="min-w-0 flex flex-col text-left">
-                      <span className="font-display text-[9px] uppercase text-pure-black truncate leading-none font-bold">
-                        {activeStoryGroup[activeStoryIndex].audioTrack.title}
-                      </span>
-                      <span className="text-[7px] font-mono text-pure-black/70 uppercase truncate mt-0.5 font-extrabold">
-                        {activeStoryGroup[activeStoryIndex].audioTrack.artist}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Tap zones for going back/forward */}
-              <button 
-                onClick={handlePrevStory}
-                className="absolute left-0 top-0 bottom-0 w-1/4 flex items-center justify-start pl-2 text-white/20 hover:text-white/80 transition-colors focus:outline-none"
-                aria-label="Previous story"
-              >
-                <ChevronLeft className="w-8 h-8 stroke-[2.5]" />
-              </button>
-              <button 
-                onClick={handleNextStory}
-                className="absolute right-0 top-0 bottom-0 w-1/4 flex items-center justify-end pr-2 text-white/20 hover:text-white/80 transition-colors focus:outline-none"
-                aria-label="Next story"
-              >
-                <ChevronRight className="w-8 h-8 stroke-[2.5]" />
-              </button>
-
-              {/* Viewers counter (visible only to story author) */}
-              {activeStoryGroup[activeStoryIndex].uid === currentUserId && (
-                <div className="absolute bottom-4 left-4 z-30">
-                  <button
-                    onClick={() => {
-                      setStoryPaused(true);
-                      setShowViewersList(true);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-pure-black/70 hover:bg-pure-black border border-white/25 text-white rounded text-xs font-bold transition-all cursor-pointer shadow-[2px_2px_0px_rgba(255,255,255,0.25)] active:translate-x-0.5 active:translate-y-0.5"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-white" />
-                    <span>{((activeStoryGroup[activeStoryIndex] as any).viewers || []).length} Viewers</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Expired date note */}
-            <div className="bg-pure-black text-center text-[9px] font-bold text-mid-gray p-2 border-t border-white/20 uppercase tracking-widest">
-              Story expires automatically in 24 hours
-            </div>
-
+                />
+              </div>
+            ))}
           </div>
 
-          {/* STORY VIEWERS LIST MODAL */}
-          {showViewersList && (
-            <div className="fixed inset-0 z-50 bg-pure-black/80 flex items-center justify-center p-4">
-              <div className="w-full max-w-sm bg-white brutal-border border-3 shadow-[8px_8px_0px_#111] p-5 rounded-lg text-pure-black flex flex-col max-h-[70vh]">
-                <div className="flex justify-between items-center border-b-2 border-pure-black pb-3 mb-4">
-                  <h4 className="font-display text-sm uppercase flex items-center gap-1.5">
-                    <Eye className="w-4 h-4 text-pure-black" />
-                    Story Viewers ({((activeStoryGroup[activeStoryIndex] as any).viewers || []).length})
-                  </h4>
-                  <button 
-                    onClick={() => {
-                      setShowViewersList(false);
-                      setStoryPaused(false);
-                    }}
-                    className="p-1 rounded brutal-border bg-white text-pure-black hover:bg-light-gray cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                  {!((activeStoryGroup[activeStoryIndex] as any).viewers) || ((activeStoryGroup[activeStoryIndex] as any).viewers).length === 0 ? (
-                    <p className="text-center py-6 text-xs font-bold text-mid-gray uppercase">
-                      No viewers yet.
-                    </p>
+          {/* Story Header */}
+          <div className="absolute top-6 left-4 right-4 z-30 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-white">
+              <div className="w-9 h-9 rounded-full overflow-hidden brutal-border border-white bg-white">
+                <img
+                  src={activeStoryGroup?.[activeStoryIndex]?.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=default'}
+                  alt="User"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div>
+                <span className="font-display text-sm uppercase leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                  {activeStoryGroup?.[activeStoryIndex]?.username || ''}
+                </span>
+                <span className="block text-[8px] font-bold text-light-gray drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                  {activeStoryGroup?.[activeStoryIndex]?.audience === 'close_friends' ? (
+                    <span className="text-[#34C759] flex items-center gap-0.5">⭐ Close Friends Only</span>
                   ) : (
-                    ((activeStoryGroup[activeStoryIndex] as any).viewers).map((viewer: any) => (
-                      <div key={viewer.uid} className="flex items-center justify-between bg-light-gray/40 brutal-border p-2 rounded">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full overflow-hidden brutal-border bg-white">
-                            <img
-                              src={viewer.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + viewer.username}
-                              alt={viewer.username}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <span 
-                            onClick={() => {
-                              setShowViewersList(false);
-                              setActiveStoryGroup(null);
-                              onViewProfile(viewer.uid);
-                            }}
-                            className="text-xs font-extrabold uppercase text-pure-black cursor-pointer hover:underline hover:text-brutal-yellow transition-colors"
-                          >
-                            @{viewer.username}
-                          </span>
-                        </div>
-                        <span className="text-[8px] font-bold text-mid-gray uppercase">
-                          {formatISTTime(viewer.viewedAt)}
-                        </span>
-                      </div>
-                    ))
+                    'Active Story'
                   )}
-                </div>
+                </span>
               </div>
             </div>
-          )}
 
+            <div className="flex gap-2.5">
+              {activeStoryGroup?.[activeStoryIndex]?.uid === currentUserId && (
+                <>
+                  <button
+                    onClick={() => {
+                      closeStoryViewer();
+                      setIsCameraOpen(true);
+                    }}
+                    className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-display uppercase tracking-wider text-pure-black bg-brutal-yellow brutal-border border rounded hover:scale-105 active:scale-95 transition-transform"
+                    title="Add another story slide"
+                  >
+                    <Plus className="w-3 h-3 stroke-[3]" /> Add Slide
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to delete this story?")) {
+                        setStoryPaused(true);
+                        const currentStory = activeStoryGroup?.[activeStoryIndex];
+                        if (!currentStory) return;
+                        const success = await socialService.deleteStory(currentStory.storyId);
+                        if (success) {
+                          addToast("Story deleted!", "success");
+                          // Filter out deleted story from active group
+                          const updatedGroup = activeStoryGroup.filter(s => s.storyId !== currentStory.storyId);
+                          if (updatedGroup.length === 0) {
+                            // Close player
+                            closeStoryViewer();
+                          } else {
+                            // If we deleted the last slide, go back one
+                            const nextIndex = activeStoryIndex >= updatedGroup.length ? updatedGroup.length - 1 : activeStoryIndex;
+                            setActiveStoryGroup(updatedGroup);
+                            setActiveStoryIndex(nextIndex);
+                            setStoryProgress(0);
+                            setStoryPaused(false);
+                            syncStoryMedia(updatedGroup, nextIndex, false);
+                          }
+                          loadFeedData();
+                        } else {
+                          addToast("Failed to delete story", "error");
+                          setStoryPaused(false);
+                        }
+                      }
+                    }}
+                    className="p-1 text-[#FF3B30] bg-pure-black/35 rounded hover:bg-[#FF3B30]/10 focus:outline-none flex items-center justify-center"
+                    title="Delete story"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={toggleStoryPause}
+                className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
+                aria-label={storyPaused ? "Resume" : "Pause"}
+              >
+                {storyPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={closeStoryViewer}
+                className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
+                aria-label="Close stories player"
+              >
+                <X className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
+          </div>
+
+          {/* Story Viewer screen */}
+          <div className="flex-1 bg-pure-black flex items-center justify-center relative">
+            <video
+              ref={activeStoryVideoRef}
+              loop
+              playsInline
+              webkit-playsinline="true"
+              muted={!!activeStoryGroup?.[activeStoryIndex]?.audioTrack}
+              onWaiting={() => setIsVideoBuffering(true)}
+              onPlaying={() => setIsVideoBuffering(false)}
+              onCanPlay={() => setIsVideoBuffering(false)}
+              onSeeked={() => setIsVideoBuffering(false)}
+              className={`w-full h-full object-contain ${
+                activeStoryGroup?.[activeStoryIndex]?.mediaType === 'video' ? 'block' : 'hidden'
+              }`}
+            />
+            {activeStoryGroup?.[activeStoryIndex]?.mediaType !== 'video' && activeStoryGroup?.[activeStoryIndex]?.mediaUrl && (
+              <img
+                src={activeStoryGroup[activeStoryIndex].mediaUrl}
+                alt="Story Media"
+                className="w-full h-full object-contain"
+              />
+            )}
+
+            {/* Dynamic Text Overlay Render */}
+            {activeStoryGroup?.[activeStoryIndex]?.caption?.trim() && (
+              <div 
+                style={{ 
+                  left: `${activeStoryGroup[activeStoryIndex].textPosition?.x ?? 50}%`, 
+                  top: `${activeStoryGroup[activeStoryIndex].textPosition?.y ?? 45}%`, 
+                  transform: 'translate(-50%, -50%)',
+                  position: 'absolute'
+                }}
+                className="max-w-[80%] text-center z-30 pointer-events-none"
+              >
+                <span 
+                  style={{ color: activeStoryGroup[activeStoryIndex].textColor ?? '#ffffff' }}
+                  className={`px-4 py-2 text-sm md:text-lg font-bold block rounded-xl break-words leading-relaxed select-none ${
+                    activeStoryGroup[activeStoryIndex].textBg !== false ? 'bg-pure-black/65 backdrop-blur-xs brutal-border text-white' : ''
+                  }`}
+                >
+                  {activeStoryGroup[activeStoryIndex].caption}
+                </span>
+              </div>
+            )}
+
+            {/* Blur Shield Protection against visible Screen Capture (Simulation) */}
+            <div className="absolute inset-0 pointer-events-none border-[6px] border-dashed border-error-red opacity-10 animate-pulse"></div>
+
+            {/* Floating Music Sticker */}
+            {activeStoryGroup?.[activeStoryIndex]?.audioTrack && (
+              <div className="absolute bottom-16 right-4 z-30 animate-[bounce_2s_infinite] max-w-[70%]">
+                <div className="px-3 py-1.5 bg-brutal-yellow brutal-border border-2 border-pure-black shadow-[3px_3px_0px_#111] rounded flex items-center gap-2 select-none">
+                  <Music className="w-3.5 h-3.5 text-pure-black fill-current animate-[spin_4s_linear_infinite]" />
+                  <div className="min-w-0 flex flex-col text-left">
+                    <span className="font-display text-[9px] uppercase text-pure-black truncate leading-none font-bold">
+                      {activeStoryGroup[activeStoryIndex].audioTrack.title}
+                    </span>
+                    <span className="text-[7px] font-mono text-pure-black/70 uppercase truncate mt-0.5 font-extrabold">
+                      {activeStoryGroup[activeStoryIndex].audioTrack.artist}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tap zones for going back/forward */}
+            <button 
+              onClick={handlePrevStory}
+              className="absolute left-0 top-0 bottom-0 w-1/4 flex items-center justify-start pl-2 text-white/20 hover:text-white/80 transition-colors focus:outline-none"
+              aria-label="Previous story"
+            >
+              <ChevronLeft className="w-8 h-8 stroke-[2.5]" />
+            </button>
+            <button 
+              onClick={handleNextStory}
+              className="absolute right-0 top-0 bottom-0 w-1/4 flex items-center justify-end pr-2 text-white/20 hover:text-white/80 transition-colors focus:outline-none"
+              aria-label="Next story"
+            >
+              <ChevronRight className="w-8 h-8 stroke-[2.5]" />
+            </button>
+
+            {/* Viewers counter (visible only to story author) */}
+            {activeStoryGroup?.[activeStoryIndex]?.uid === currentUserId && (
+              <div className="absolute bottom-4 left-4 z-30">
+                <button
+                  onClick={() => {
+                    setStoryPaused(true);
+                    setShowViewersList(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-pure-black/70 hover:bg-pure-black border border-white/25 text-white rounded text-xs font-bold transition-all cursor-pointer shadow-[2px_2px_0px_rgba(255,255,255,0.25)] active:translate-x-0.5 active:translate-y-0.5"
+                >
+                  <Eye className="w-3.5 h-3.5 text-white" />
+                  <span>{(activeStoryGroup[activeStoryIndex] as any).viewers?.length || 0} Viewers</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Expired date note */}
+          <div className="bg-pure-black text-center text-[9px] font-bold text-mid-gray p-2 border-t border-white/20 uppercase tracking-widest">
+            Story expires automatically in 24 hours
+          </div>
+
+        </div>
+      </div>
+
+      {/* STORY VIEWERS LIST MODAL */}
+      {showViewersList && activeStoryGroup?.[activeStoryIndex] && (
+        <div className="fixed inset-0 z-50 bg-pure-black/80 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white brutal-border border-3 shadow-[8px_8px_0px_#111] p-5 rounded-lg text-pure-black flex flex-col max-h-[70vh]">
+            <div className="flex justify-between items-center border-b-2 border-pure-black pb-3 mb-4">
+              <h4 className="font-display text-sm uppercase flex items-center gap-1.5">
+                <Eye className="w-4 h-4 text-pure-black" />
+                Story Viewers ({(activeStoryGroup[activeStoryIndex] as any).viewers?.length || 0})
+              </h4>
+              <button 
+                onClick={() => {
+                  setShowViewersList(false);
+                  setStoryPaused(false);
+                }}
+                className="p-1 rounded brutal-border bg-white text-pure-black hover:bg-light-gray cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {!(activeStoryGroup[activeStoryIndex] as any).viewers || (activeStoryGroup[activeStoryIndex] as any).viewers.length === 0 ? (
+                <p className="text-center py-6 text-xs font-bold text-mid-gray uppercase">
+                  No viewers yet.
+                </p>
+              ) : (
+                ((activeStoryGroup[activeStoryIndex] as any).viewers).map((viewer: any) => (
+                  <div key={viewer.uid} className="flex items-center justify-between bg-light-gray/40 brutal-border p-2 rounded">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full overflow-hidden brutal-border bg-white">
+                        <img
+                          src={viewer.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + viewer.username}
+                          alt={viewer.username}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <span 
+                        onClick={() => {
+                          setShowViewersList(false);
+                          closeStoryViewer();
+                          onViewProfile(viewer.uid);
+                        }}
+                        className="text-xs font-extrabold uppercase text-pure-black cursor-pointer hover:underline hover:text-brutal-yellow transition-colors"
+                      >
+                        @{viewer.username}
+                      </span>
+                    </div>
+                    <span className="text-[8px] font-bold text-mid-gray uppercase">
+                      {formatISTTime(viewer.viewedAt)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
