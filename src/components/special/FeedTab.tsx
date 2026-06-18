@@ -46,7 +46,9 @@ export default function FeedTab({
   // Audio playing states & references
   const [playingPostId, setPlayingPostId] = useState<string | null>(null);
   const activePostAudioRef = useRef<{ postId: string; audio: HTMLAudioElement; timer: NodeJS.Timeout | null } | null>(null);
-  const activeStoryAudioRef = useRef<HTMLAudioElement | null>(null);
+  const activeStoryAudioRef = useRef<HTMLAudioElement | null>(
+    typeof window !== 'undefined' ? new Audio() : null
+  );
   const storyAudioTimerRef = useRef<NodeJS.Timeout | null>(null);
   const activeStoryVideoRef = useRef<HTMLVideoElement | null>(null);
   const lastSyncedRef = useRef<{ storyId: string | null; paused: boolean }>({
@@ -166,8 +168,6 @@ export default function FeedTab({
           audio.play().catch(err => {
             if (err.name === 'AbortError') return;
             console.warn("Story audio playback blocked:", err);
-            setStoryMuted(true);
-            audio.muted = true;
           });
         } else {
           audio.pause();
@@ -1049,7 +1049,7 @@ export default function FeedTab({
               </div>
             </div>
 
-            <div className="flex gap-2.5">
+            <div className="flex items-center gap-2.5">
               {activeStoryGroup?.[activeStoryIndex]?.uid === currentUserId && (
                 <>
                   <button
@@ -1057,10 +1057,10 @@ export default function FeedTab({
                       closeStoryViewer();
                       setIsCameraOpen(true);
                     }}
-                    className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-display uppercase tracking-wider text-pure-black bg-brutal-yellow brutal-border border rounded hover:scale-105 active:scale-95 transition-transform"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] md:text-xs font-display uppercase tracking-wider text-pure-black bg-brutal-yellow hover:bg-[#FFE300] border-2 border-pure-black shadow-[2px_2px_0px_#111] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_#111] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[0px_0px_0px_#111] transition-all rounded"
                     title="Add another story slide"
                   >
-                    <Plus className="w-3 h-3 stroke-[3]" /> Add Slide
+                    <Plus className="w-3.5 h-3.5 stroke-[3] text-pure-black" /> Add Slide
                   </button>
                   <button
                     onClick={async () => {
@@ -1092,7 +1092,7 @@ export default function FeedTab({
                         }
                       }
                     }}
-                    className="p-1 text-[#FF3B30] bg-pure-black/35 rounded hover:bg-[#FF3B30]/10 focus:outline-none flex items-center justify-center"
+                    className="p-1.5 text-[#FF3B30] bg-pure-black/35 rounded hover:bg-[#FF3B30]/10 focus:outline-none flex items-center justify-center border border-white/20"
                     title="Delete story"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1101,23 +1101,15 @@ export default function FeedTab({
               )}
 
               <button
-                onClick={toggleStoryMuted}
-                className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
-                aria-label={storyMuted ? "Unmute" : "Mute"}
-                title={storyMuted ? "Unmute" : "Mute"}
-              >
-                {storyMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-              <button
                 onClick={toggleStoryPause}
-                className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
+                className="p-1.5 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none flex items-center justify-center border border-white/20"
                 aria-label={storyPaused ? "Resume" : "Pause"}
               >
                 {storyPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
               </button>
               <button
                 onClick={closeStoryViewer}
-                className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
+                className="p-1.5 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none flex items-center justify-center border border-white/20"
                 aria-label="Close stories player"
               >
                 <X className="w-4 h-4 stroke-[2.5]" />
