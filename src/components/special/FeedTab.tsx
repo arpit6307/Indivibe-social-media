@@ -37,6 +37,7 @@ export default function FeedTab({
   const [storyPaused, setStoryPaused] = useState(false);
   const [showViewersList, setShowViewersList] = useState(false);
   const [isVideoBuffering, setIsVideoBuffering] = useState(false);
+  const [storyDuration, setStoryDuration] = useState(5000);
 
   // Camera state
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -69,6 +70,16 @@ export default function FeedTab({
     };
   }, []);
 
+  // Safety timeout to prevent infinite video buffering freeze
+  useEffect(() => {
+    if (isVideoBuffering) {
+      const timer = setTimeout(() => {
+        setIsVideoBuffering(false);
+      }, 3000); // 3 seconds max buffering pause
+      return () => clearTimeout(timer);
+    }
+  }, [isVideoBuffering]);
+
   // Helper to synchronize audio & video for the story player
   const syncStoryMedia = (group: Story[] | null, index: number, paused: boolean) => {
     // 1. If no active story group or out of bounds, pause and clean up
@@ -98,6 +109,13 @@ export default function FeedTab({
     }
 
     const story = group[index];
+
+    // Set initial duration for this slide
+    if (story.audioTrack) {
+      setStoryDuration(story.audioTrack.duration * 1000);
+    } else {
+      setStoryDuration(5000);
+    }
 
     // 2. Synchronize Audio Track
     if (typeof window !== 'undefined') {
@@ -211,6 +229,19 @@ export default function FeedTab({
       }
     };
   }, [activeStoryGroup, activeStoryIndex, storyPaused]);
+
+  // Reset progress on slide change
+  useEffect(() => {
+    setStoryProgress(0);
+  }, [activeStoryIndex, activeStoryGroup]);
+
+  const handleVideoMetadata = (video: HTMLVideoElement) => {
+    const currentStory = activeStoryGroup?.[activeStoryIndex];
+    if (currentStory && currentStory.mediaType === 'video' && !currentStory.audioTrack) {
+      const dur = video.duration ? video.duration * 1000 : 5000;
+      setStoryDuration(dur);
+    }
+  };
 
   // Play post audio segment
   const handlePlayPostAudio = (post: Post) => {
@@ -441,9 +472,8 @@ export default function FeedTab({
     }
 
     // Story progress tick
-    setStoryProgress(0);
     const step = 2; // Tick size
-    const duration = 5000; // 5 seconds per story
+    const duration = storyDuration || 5000;
     const intervalTime = (duration * step) / 100;
 
     progressTimerRef.current = setInterval(() => {
@@ -462,7 +492,7 @@ export default function FeedTab({
       if (storyTimerRef.current) clearInterval(storyTimerRef.current);
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
     };
-  }, [activeStoryGroup, activeStoryIndex, storyPaused, isVideoBuffering]);
+  }, [activeStoryGroup, activeStoryIndex, storyPaused, isVideoBuffering, storyDuration]);
 
   const handleNextStory = () => {
     if (!activeStoryGroup) return;
@@ -981,10 +1011,15 @@ export default function FeedTab({
               playsInline
               webkit-playsinline="true"
               muted={!!activeStoryGroup?.[activeStoryIndex]?.audioTrack}
-              onWaiting={() => setIsVideoBuffering(true)}
+              onWaiting={() => {
+                if (activeStoryGroup?.[activeStoryIndex]?.mediaType === 'video' && activeStoryVideoRef.current?.src) {
+                  setIsVideoBuffering(true);
+                }
+              }}
               onPlaying={() => setIsVideoBuffering(false)}
               onCanPlay={() => setIsVideoBuffering(false)}
               onSeeked={() => setIsVideoBuffering(false)}
+              onLoadedMetadata={(e) => handleVideoMetadata(e.currentTarget)}
               className={`w-full h-full object-contain ${
                 activeStoryGroup?.[activeStoryIndex]?.mediaType === 'video' ? 'block' : 'hidden'
               }`}
