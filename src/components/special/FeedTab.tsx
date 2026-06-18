@@ -53,11 +53,11 @@ export default function FeedTab({
     storyId: null,
     paused: false
   });
-
+  const animationFrameIdRef = useRef<number | null>(null);
+  const progressElapsedRef = useRef<number>(0);
+  const lastProgressTimeRef = useRef<number>(0);
 
   const addToast = useUIStore((state) => state.addToast);
-  const storyTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const progressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cleanup all audio players on unmount
   useEffect(() => {
@@ -71,6 +71,9 @@ export default function FeedTab({
       }
       if (storyAudioTimerRef.current) {
         clearInterval(storyAudioTimerRef.current);
+      }
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
       }
     };
   }, []);
@@ -235,6 +238,29 @@ export default function FeedTab({
         video.src = '';
         setIsVideoBuffering(false);
       }
+      
+      // Preload adjacent slides for smooth transition
+      preloadStoryImages(group, index);
+    }
+  };
+
+  const preloadStoryImages = (group: Story[] | null, index: number) => {
+    if (!group || typeof window === 'undefined') return;
+    // Preload next slide
+    if (index + 1 < group.length) {
+      const nextStory = group[index + 1];
+      if (nextStory.mediaType !== 'video' && nextStory.mediaUrl) {
+        const img = new Image();
+        img.src = nextStory.mediaUrl;
+      }
+    }
+    // Preload previous slide (for quick back-taps)
+    if (index - 1 >= 0) {
+      const prevStory = group[index - 1];
+      if (prevStory.mediaType !== 'video' && prevStory.mediaUrl) {
+        const img = new Image();
+        img.src = prevStory.mediaUrl;
+      }
     }
   };
 
@@ -262,6 +288,9 @@ export default function FeedTab({
   // Reset progress on slide change
   useEffect(() => {
     setStoryProgress(0);
+    if (typeof window !== 'undefined') {
+      progressElapsedRef.current = 0;
+    }
   }, [activeStoryIndex, activeStoryGroup]);
 
   const handleVideoMetadata = (video: HTMLVideoElement) => {
@@ -486,42 +515,67 @@ export default function FeedTab({
     storiesByUser[story.uid].push(story);
   });
 
-  // Story player logic
+  // requestAnimationFrame based smooth story progression
   useEffect(() => {
     if (!activeStoryGroup) {
-      if (storyTimerRef.current) clearInterval(storyTimerRef.current);
-      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
       return;
     }
 
     if (storyPaused || isVideoBuffering) {
-      if (storyTimerRef.current) clearInterval(storyTimerRef.current);
-      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
       return;
     }
 
-    // Story progress tick
-    const step = 2; // Tick size
-    const duration = storyDuration || 5000;
-    const intervalTime = (duration * step) / 100;
+    // Reset last time on resume/start
+    lastProgressTimeRef.current = performance.now();
 
-    progressTimerRef.current = setInterval(() => {
-      setStoryProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressTimerRef.current!);
-          // Next story in group
-          handleNextStory();
-          return 100;
-        }
-        return prev + step;
-      });
-    }, intervalTime);
+    const tick = () => {
+      const now = performance.now();
+      const delta = now - lastProgressTimeRef.current;
+      lastProgressTimeRef.current = now;
+
+      progressElapsedRef.current += delta;
+      const duration = storyDuration || 5000;
+      const pct = Math.min(100, (progressElapsedRef.current / duration) * 100);
+
+      setStoryProgress(pct);
+
+      if (pct >= 100) {
+        // Advance to next story
+        handleNextStory();
+      } else {
+        animationFrameIdRef.current = requestAnimationFrame(tick);
+      }
+    };
+
+    animationFrameIdRef.current = requestAnimationFrame(tick);
 
     return () => {
-      if (storyTimerRef.current) clearInterval(storyTimerRef.current);
-      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
     };
   }, [activeStoryGroup, activeStoryIndex, storyPaused, isVideoBuffering, storyDuration]);
+
+  // Hoist closeStoryViewer above handlers that use it to avoid TDZ lint warnings
+  const closeStoryViewer = () => {
+    setActiveStoryGroup(null);
+    setActiveStoryIndex(0);
+    setStoryProgress(0);
+    if (typeof window !== 'undefined') {
+      progressElapsedRef.current = 0;
+    }
+    setIsVideoBuffering(false);
+    syncStoryMedia(null, 0, false);
+  };
 
   const handleNextStory = () => {
     if (!activeStoryGroup) return;
@@ -529,6 +583,9 @@ export default function FeedTab({
       const nextIndex = activeStoryIndex + 1;
       setActiveStoryIndex(nextIndex);
       setStoryProgress(0);
+      if (typeof window !== 'undefined') {
+        progressElapsedRef.current = 0;
+      }
       // Synchronously trigger play for next slide
       syncStoryMedia(activeStoryGroup, nextIndex, storyPaused);
     } else {
@@ -543,11 +600,17 @@ export default function FeedTab({
       const prevIndex = activeStoryIndex - 1;
       setActiveStoryIndex(prevIndex);
       setStoryProgress(0);
+      if (typeof window !== 'undefined') {
+        progressElapsedRef.current = 0;
+      }
       // Synchronously trigger play for previous slide
       syncStoryMedia(activeStoryGroup, prevIndex, storyPaused);
     } else {
       setActiveStoryIndex(0);
       setStoryProgress(0);
+      if (typeof window !== 'undefined') {
+        progressElapsedRef.current = 0;
+      }
       syncStoryMedia(activeStoryGroup, 0, storyPaused);
     }
   };
@@ -556,17 +619,12 @@ export default function FeedTab({
     setActiveStoryGroup(userStories);
     setActiveStoryIndex(0);
     setStoryProgress(0);
+    if (typeof window !== 'undefined') {
+      progressElapsedRef.current = 0;
+    }
     setStoryPaused(false);
     // Synchronously trigger playback to capture user click gesture!
     syncStoryMedia(userStories, 0, false);
-  };
-
-  const closeStoryViewer = () => {
-    setActiveStoryGroup(null);
-    setActiveStoryIndex(0);
-    setStoryProgress(0);
-    setIsVideoBuffering(false);
-    syncStoryMedia(null, 0, false);
   };
 
   const toggleStoryPause = () => {
@@ -958,7 +1016,7 @@ export default function FeedTab({
             {(activeStoryGroup || []).map((story, idx) => (
               <div key={story.storyId} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-white transition-all ease-linear"
+                  className="h-full bg-white"
                   style={{
                     width: idx < activeStoryIndex ? '100%' : idx === activeStoryIndex ? `${storyProgress}%` : '0%',
                   }}
@@ -1092,6 +1150,8 @@ export default function FeedTab({
               <img
                 src={activeStoryGroup?.[activeStoryIndex]?.mediaUrl}
                 alt="Story Media"
+                loading="eager"
+                decoding="async"
                 className="w-full h-full object-contain"
               />
             )}
