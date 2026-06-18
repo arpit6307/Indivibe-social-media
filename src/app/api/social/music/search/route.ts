@@ -51,81 +51,109 @@ async function getSpotifyAccessToken() {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const query = searchParams.get('q');
-    if (!query) {
+    const queryStr = searchParams.get('q');
+    if (!queryStr) {
       return NextResponse.json({ data: [] });
     }
 
     const spotifyToken = await getSpotifyAccessToken();
 
-    if (spotifyToken) {
-      // 1. SPOTIFY SEARCH FLOW
-      const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=20`, {
-        headers: {
-          'Authorization': `Bearer ${spotifyToken}`
-        }
-      });
+    // Fetch Spotify and iTunes in parallel to avoid rate limiting and get fast responses
+    const [spotifyRes, itunesRes] = await Promise.all([
+      spotifyToken
+        ? fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(queryStr)}&type=track&limit=25`, {
+            headers: { 'Authorization': `Bearer ${spotifyToken}` }
+          }).catch(err => {
+            console.warn("Spotify fetch error:", err);
+            return null;
+          })
+        : Promise.resolve(null),
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(queryStr)}&media=music&limit=30`).catch(err => {
+        console.warn("iTunes fetch error:", err);
+        return null;
+      })
+    ]);
 
-      if (res.ok) {
-        const data = await res.json();
-        const items = data.tracks?.items || [];
-
-        // Map Spotify tracks and resolve missing preview_urls using iTunes
-        const songs = await Promise.all(items.map(async (item: any) => {
-          let audioUrl = item.preview_url;
-
-          // Fallback to iTunes search if Spotify doesn't have a preview URL
-          if (!audioUrl) {
-            try {
-              const artistName = item.artists?.[0]?.name || '';
-              const searchterm = `${item.name} ${artistName}`;
-              const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchterm)}&media=music&limit=1`);
-              if (itunesRes.ok) {
-                const itunesData = await itunesRes.json();
-                if (itunesData.results?.[0]?.previewUrl) {
-                  audioUrl = itunesData.results[0].previewUrl;
-                }
-              }
-            } catch (itErr) {
-              console.warn("iTunes preview fallback resolve failed:", itErr);
-            }
-          }
-
-          return {
-            id: item.id.toString(),
-            title: item.name,
-            artist: item.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-            audioUrl: audioUrl || '',
-            coverUrl: item.album?.images?.[0]?.url || item.album?.images?.[1]?.url || ''
-          };
-        }));
-
-        // Filter out songs that have no audio preview URL to ensure they are playable
-        const playableSongs = songs.filter(song => song.audioUrl !== '');
-
-        return NextResponse.json({ data: playableSongs });
-      } else {
-        console.warn("Spotify search API failed, falling back to iTunes search");
+    // Parse iTunes results first since we'll use them for local matching
+    let itunesSongs: any[] = [];
+    if (itunesRes && itunesRes.ok) {
+      try {
+        const itunesData = await itunesRes.json();
+        itunesSongs = (itunesData.results || []).map((item: any) => ({
+          id: `itunes-${item.trackId}`,
+          title: item.trackName,
+          artist: item.artistName || 'Unknown Artist',
+          audioUrl: item.previewUrl || '',
+          coverUrl: item.artworkUrl100?.replace('100x100bb', '300x300bb') || ''
+        })).filter((s: any) => s.audioUrl !== '');
+      } catch (err) {
+        console.warn("Failed to parse iTunes search results:", err);
       }
     }
 
-    // 2. FALLBACK ITUNES SEARCH FLOW (If Spotify credentials are not configured or request fails)
-    const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=30`);
-    if (!itunesRes.ok) {
-      throw new Error('iTunes Search API returned error');
-    }
-    const itunesData = await itunesRes.json();
-    const songs = (itunesData.results || []).map((item: any) => ({
-      id: item.trackId.toString(),
-      title: item.trackName,
-      artist: item.artistName || 'Unknown Artist',
-      audioUrl: item.previewUrl,
-      coverUrl: item.artworkUrl100?.replace('100x100bb', '300x300bb') || ''
-    })).filter((song: any) => song.audioUrl);
+    const mergedSongs: any[] = [];
+    const seenKeys = new Set<string>();
 
-    return NextResponse.json({ data: songs });
+    const getSongKey = (title: string, artist: string) => {
+      return `${title.toLowerCase().trim()}|${artist.toLowerCase().trim()}`;
+    };
+
+    // Process Spotify results if available
+    if (spotifyRes && spotifyRes.ok) {
+      try {
+        const data = await spotifyRes.json();
+        const items = data.tracks?.items || [];
+
+        for (const item of items) {
+          const title = item.name;
+          const artist = item.artists?.map((a: any) => a.name).join(', ') || 'Unknown Artist';
+          let audioUrl = item.preview_url || '';
+
+          // If Spotify preview_url is missing, look it up in our iTunes results in-memory (no extra network request!)
+          if (!audioUrl) {
+            const firstArtist = item.artists?.[0]?.name?.toLowerCase() || '';
+            const match = itunesSongs.find(is => 
+              is.title.toLowerCase().includes(title.toLowerCase()) || 
+              title.toLowerCase().includes(is.title.toLowerCase()) && 
+              (is.artist.toLowerCase().includes(firstArtist) || firstArtist.includes(is.artist.toLowerCase()))
+            );
+            if (match) {
+              audioUrl = match.audioUrl;
+            }
+          }
+
+          if (audioUrl) {
+            const key = getSongKey(title, artist);
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              mergedSongs.push({
+                id: `spotify-${item.id}`,
+                title,
+                artist,
+                audioUrl,
+                coverUrl: item.album?.images?.[0]?.url || item.album?.images?.[1]?.url || ''
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to parse Spotify search results:", err);
+      }
+    }
+
+    // Append remaining iTunes songs that weren't merged/matched
+    for (const song of itunesSongs) {
+      const key = getSongKey(song.title, song.artist);
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        mergedSongs.push(song);
+      }
+    }
+
+    return NextResponse.json({ data: mergedSongs });
   } catch (err: any) {
     console.error("Music Search API error:", err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }
+

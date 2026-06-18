@@ -109,12 +109,32 @@ export function SongSelectorModal({ onSelect, onClose }: SongSelectorModalProps)
     }
   }, [previewSongId, selectedSong, isPlaying, startTime, duration]);
 
-  // Reset search results if query cleared
+  // Debounced search on type
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
+      setSearching(false);
+      return;
     }
+
+    setSearching(true);
+    const delayDebounceFn = setTimeout(async () => {
+      stopAudio();
+      setPreviewSongId(null);
+      try {
+        const res = await fetch(`/api/social/music/search?q=${encodeURIComponent(searchQuery.trim())}`);
+        const data = await res.json();
+        setSearchResults(data.data || []);
+      } catch (err) {
+        console.warn("Failed to search music:", err);
+      } finally {
+        setSearching(false);
+      }
+    }, 450); // 450ms debounce delay
+
+    return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
+
 
   const stopAudio = () => {
     if (audioRef.current) {
