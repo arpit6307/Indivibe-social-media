@@ -38,6 +38,7 @@ export default function FeedTab({
   const [showViewersList, setShowViewersList] = useState(false);
   const [isVideoBuffering, setIsVideoBuffering] = useState(false);
   const [storyDuration, setStoryDuration] = useState(5000);
+  const [storyMuted, setStoryMuted] = useState(false);
 
   // Camera state
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -139,9 +140,14 @@ export default function FeedTab({
           audio.load();
         }
         audio.currentTime = track.startTime;
+        audio.muted = storyMuted;
 
         if (!paused) {
-          audio.play().catch(err => console.warn("Story audio playback blocked:", err));
+          audio.play().catch(err => {
+            console.warn("Story audio playback blocked:", err);
+            setStoryMuted(true);
+            audio.muted = true;
+          });
         } else {
           audio.pause();
         }
@@ -175,7 +181,7 @@ export default function FeedTab({
           video.src = targetSrc;
           video.load();
         }
-        video.muted = !!story.audioTrack; // mute if there is a custom soundtrack
+        video.muted = !!story.audioTrack || storyMuted; // mute if custom soundtrack is present or if user muted
 
         setIsVideoBuffering(true); // Default to buffering until ready
 
@@ -544,6 +550,27 @@ export default function FeedTab({
     const nextPaused = !storyPaused;
     setStoryPaused(nextPaused);
     syncStoryMedia(activeStoryGroup, activeStoryIndex, nextPaused);
+  };
+
+  const toggleStoryMuted = () => {
+    const nextMuted = !storyMuted;
+    setStoryMuted(nextMuted);
+    
+    if (activeStoryAudioRef.current) {
+      activeStoryAudioRef.current.muted = nextMuted;
+      if (!nextMuted && !storyPaused) {
+        activeStoryAudioRef.current.play().catch(err => console.warn("Audio play failed on unmute:", err));
+      }
+    }
+    
+    if (activeStoryVideoRef.current) {
+      const currentStory = activeStoryGroup?.[activeStoryIndex];
+      const hasAudioTrack = !!currentStory?.audioTrack;
+      activeStoryVideoRef.current.muted = hasAudioTrack ? true : nextMuted;
+      if (!nextMuted && !storyPaused && !hasAudioTrack) {
+        activeStoryVideoRef.current.play().catch(err => console.warn("Video play failed on unmute:", err));
+      }
+    }
   };
 
   return (
@@ -986,6 +1013,14 @@ export default function FeedTab({
                 </>
               )}
 
+              <button
+                onClick={toggleStoryMuted}
+                className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
+                aria-label={storyMuted ? "Unmute" : "Mute"}
+                title={storyMuted ? "Unmute" : "Mute"}
+              >
+                {storyMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              </button>
               <button
                 onClick={toggleStoryPause}
                 className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
