@@ -90,6 +90,8 @@ export default function SearchProfileView({
     } catch (err: any) {
       addToast(err.message || "Failed to follow", "error");
     }
+  };
+
   const handleCloseFriendToggle = async () => {
     if (!profile || !myProfile) return;
     try {

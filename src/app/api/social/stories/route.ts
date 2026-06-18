@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     // Handle mentions in caption
     if (caption && caption.includes('@')) {
       const mentions = caption.match(/@[a-zA-Z0-9_]+/g) || [];
-      const uniqueMentions = Array.from(new Set(mentions.map(m => m.substring(1).toLowerCase())));
+      const uniqueMentions = Array.from(new Set(mentions.map((m: string) => m.substring(1).toLowerCase())));
       
       const profiles = globalStore.registeredUserProfiles || new Map();
       
