@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Heart, MessageCircle, UserPlus, Check, UserMinus, X } from 'lucide-react';
+import { Bell, Heart, MessageCircle, UserPlus, Check, UserMinus, X, Camera } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { socialService, Notification } from '@/lib/socialService';
@@ -25,6 +25,7 @@ export default function NotificationsTab({
     new Set(currentUserFollowing ?? [])
   );
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
 
   // Swipe-to-delete states for mobile
   const addToast = useUIStore((state) => state.addToast);
@@ -114,8 +115,11 @@ export default function NotificationsTab({
       ]);
       setNotifications(logs);
 
-      if (profile?.following) {
-        setFollowingSet(new Set(profile.following));
+      if (profile) {
+        setCurrentUserProfile(profile);
+        if (profile.following) {
+          setFollowingSet(new Set(profile.following));
+        }
       }
 
       // Automatically mark notifications as read when viewed
@@ -199,6 +203,8 @@ export default function NotificationsTab({
         return <UserPlus className="w-2.5 h-2.5 text-success-green" />;
       case 'follow_accept':
         return <Check className="w-2.5 h-2.5 text-success-green" />;
+      case 'story_mention':
+        return <Camera className="w-2.5 h-2.5 text-[#34C759]" />;
       default:
         return <Bell className="w-2.5 h-2.5 text-pure-black" />;
     }
@@ -255,6 +261,46 @@ export default function NotificationsTab({
         <span className="inline-flex items-center gap-0.5 py-0.5 px-2 text-[8px] font-display uppercase bg-success-green/10 text-success-green border border-success-green rounded-sm">
           Accepted <Check className="w-2.5 h-2.5" />
         </span>
+      );
+    }
+
+    if (notif.type === 'story_mention') {
+      const isReposterProcessing = processingIds.has(notif.notificationId);
+      return (
+        <Button
+          variant="primary"
+          className="py-1 px-2.5 text-[9px] font-display uppercase shadow-none border-pure-black bg-brutal-yellow text-pure-black"
+          onClick={async () => {
+            setProcessingIds(prev => new Set(prev).add(notif.notificationId));
+            try {
+              addToast("Reposting story to your feed...", "info");
+              await socialService.createStory(
+                currentUserId,
+                currentUserProfile?.username || 'user',
+                currentUserProfile?.profilePhotoUrl || '',
+                notif.storyMediaUrl || '',
+                'image',
+                notif.storyAudioTrack || undefined,
+                'public',
+                `Reposted from @${notif.senderUsername}`
+              );
+              addToast("Reposted to your story successfully!", "success");
+              loadNotifications();
+            } catch (err: any) {
+              console.error(err);
+              addToast(err.message || "Failed to repost story", "error");
+            } finally {
+              setProcessingIds(prev => {
+                const next = new Set(prev);
+                next.delete(notif.notificationId);
+                return next;
+              });
+            }
+          }}
+          disabled={isReposterProcessing}
+        >
+          {isReposterProcessing ? '...' : 'Add to Story'}
+        </Button>
       );
     }
 

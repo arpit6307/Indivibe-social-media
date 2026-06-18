@@ -46,6 +46,7 @@ export default function StoryCameraModal({
   // Music state
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [isMusicSelectorOpen, setIsMusicSelectorOpen] = useState(false);
+  const [audience, setAudience] = useState<'public' | 'close_friends'>('public');
 
   // Initialize camera stream
   const startCamera = async () => {
@@ -157,61 +158,125 @@ export default function StoryCameraModal({
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        
-        if (ctx) {
-          // 1. Draw base image
-          ctx.drawImage(img, 0, 0);
+        const isStory = publishType === 'story';
 
-          // 2. Draw text overlay if it exists
-          if (overlayText.trim()) {
-            const fontSize = Math.round(canvas.width * 0.05); // Dynamic size based on image width
-            ctx.font = `bold ${fontSize}px sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            const x = canvas.width / 2;
-            const y = canvas.height * 0.45; // Centered vertically in upper area
-            const padding = fontSize * 0.5;
-            
-            const metrics = ctx.measureText(overlayText);
-            const textWidth = metrics.width;
-            const textHeight = fontSize;
-
-            // Draw semi-transparent background bubble
-            if (textBg) {
-              ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-              const rectX = x - textWidth / 2 - padding;
-              const rectY = y - textHeight / 2 - padding / 2;
-              const rectW = textWidth + padding * 2;
-              const rectH = textHeight + padding;
-              const radius = fontSize * 0.3;
-
-              // Rounded rectangle
-              ctx.beginPath();
-              ctx.moveTo(rectX + radius, rectY);
-              ctx.lineTo(rectX + rectW - radius, rectY);
-              ctx.quadraticCurveTo(rectX + rectW, rectY, rectX + rectW, rectY + radius);
-              ctx.lineTo(rectX + rectW, rectY + rectH - radius);
-              ctx.quadraticCurveTo(rectX + rectW, rectY + rectH, rectX + rectW - radius, rectY + rectH);
-              ctx.lineTo(rectX + radius, rectY + rectH);
-              ctx.quadraticCurveTo(rectX, rectY + rectH, rectX, rectY + rectH - radius);
-              ctx.lineTo(rectX, rectY + radius);
-              ctx.quadraticCurveTo(rectX, rectY, rectX + radius, rectY);
-              ctx.closePath();
-              ctx.fill();
-            }
-
-            // Draw Text
-            ctx.fillStyle = textColor;
-            ctx.fillText(overlayText, x, y + fontSize * 0.05);
+        if (isStory) {
+          // Force 9:16 aspect ratio crop
+          const targetAspect = 9 / 16;
+          let cropWidth = img.width;
+          let cropHeight = img.height;
+          let sx = 0;
+          let sy = 0;
+          
+          if (img.width / img.height > targetAspect) {
+            cropWidth = img.height * targetAspect;
+            sx = (img.width - cropWidth) / 2;
+          } else {
+            cropHeight = img.width / targetAspect;
+            sy = (img.height - cropHeight) / 2;
           }
-
-          resolve(canvas.toDataURL('image/jpeg', 0.95));
+          
+          canvas.width = 1080;
+          canvas.height = 1920;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, sx, sy, cropWidth, cropHeight, 0, 0, 1080, 1920);
+            
+            // Draw text overlay if it exists
+            if (overlayText.trim()) {
+              const fontSize = 54; // standard size for 1080x1920
+              ctx.font = `bold ${fontSize}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              
+              const x = 540;
+              const y = 864; // roughly centered vertically (upper half)
+              const padding = fontSize * 0.5;
+              
+              const metrics = ctx.measureText(overlayText);
+              const textWidth = metrics.width;
+              const textHeight = fontSize;
+              
+              if (textBg) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                const rectX = x - textWidth / 2 - padding;
+                const rectY = y - textHeight / 2 - padding / 2;
+                const rectW = textWidth + padding * 2;
+                const rectH = textHeight + padding;
+                const radius = fontSize * 0.3;
+                
+                ctx.beginPath();
+                ctx.moveTo(rectX + radius, rectY);
+                ctx.lineTo(rectX + rectW - radius, rectY);
+                ctx.quadraticCurveTo(rectX + rectW, rectY, rectX + rectW, rectY + radius);
+                ctx.lineTo(rectX + rectW, rectY + rectH - radius);
+                ctx.quadraticCurveTo(rectX + rectW, rectY + rectH, rectX + rectW - radius, rectY + rectH);
+                ctx.lineTo(rectX + radius, rectY + rectH);
+                ctx.quadraticCurveTo(rectX, rectY + rectH, rectX, rectY + rectH - radius);
+                ctx.lineTo(rectX, rectY + radius);
+                ctx.quadraticCurveTo(rectX, rectY, rectX + radius, rectY);
+                ctx.closePath();
+                ctx.fill();
+              }
+              
+              ctx.fillStyle = textColor;
+              ctx.fillText(overlayText, x, y + fontSize * 0.05);
+            }
+            resolve(canvas.toDataURL('image/jpeg', 0.95));
+          } else {
+            resolve(capturedImage);
+          }
         } else {
-          resolve(capturedImage);
+          // Standard post compile (keep original aspect)
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            
+            if (overlayText.trim()) {
+              const fontSize = Math.round(canvas.width * 0.05);
+              ctx.font = `bold ${fontSize}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              
+              const x = canvas.width / 2;
+              const y = canvas.height * 0.45;
+              const padding = fontSize * 0.5;
+              
+              const metrics = ctx.measureText(overlayText);
+              const textWidth = metrics.width;
+              const textHeight = fontSize;
+              
+              if (textBg) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                const rectX = x - textWidth / 2 - padding;
+                const rectY = y - textHeight / 2 - padding / 2;
+                const rectW = textWidth + padding * 2;
+                const rectH = textHeight + padding;
+                const radius = fontSize * 0.3;
+                
+                ctx.beginPath();
+                ctx.moveTo(rectX + radius, rectY);
+                ctx.lineTo(rectX + rectW - radius, rectY);
+                ctx.quadraticCurveTo(rectX + rectW, rectY, rectX + rectW, rectY + radius);
+                ctx.lineTo(rectX + rectW, rectY + rectH - radius);
+                ctx.quadraticCurveTo(rectX + rectW, rectY + rectH, rectX + rectW - radius, rectY + rectH);
+                ctx.lineTo(rectX + radius, rectY + rectH);
+                ctx.quadraticCurveTo(rectX, rectY + rectH, rectX, rectY + rectH - radius);
+                ctx.lineTo(rectX, rectY + radius);
+                ctx.quadraticCurveTo(rectX, rectY, rectX + radius, rectY);
+                ctx.closePath();
+                ctx.fill();
+              }
+              
+              ctx.fillStyle = textColor;
+              ctx.fillText(overlayText, x, y + fontSize * 0.05);
+            }
+            resolve(canvas.toDataURL('image/jpeg', 0.95));
+          } else {
+            resolve(capturedImage);
+          }
         }
       };
       img.src = capturedImage;
@@ -252,7 +317,9 @@ export default function StoryCameraModal({
           currentUserProfile?.profilePhotoUrl || '',
           finalMediaUrl,
           'image',
-          selectedSong || undefined
+          selectedSong || undefined,
+          audience,
+          overlayText
         );
         addToast("Story uploaded successfully!", "success");
       } else {
@@ -512,6 +579,37 @@ export default function StoryCameraModal({
               >
                 <Send className="w-4 h-4" /> Share
               </Button>
+            </div>
+          )}
+
+          {/* Story Audience Selection */}
+          {publishType === 'story' && (
+            <div className="flex items-center gap-3 p-2 bg-white/5 border border-white/15 rounded-lg shrink-0 mb-1 justify-between">
+              <span className="text-[10px] font-display uppercase text-white tracking-wider font-extrabold">Audience:</span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setAudience('public')}
+                  className={`px-3 py-1 rounded-full text-[8px] font-display uppercase tracking-wider border transition-colors cursor-pointer ${
+                    audience === 'public' 
+                      ? 'bg-brutal-yellow text-pure-black border-brutal-yellow font-bold shadow-[1px_1px_0px_#111]' 
+                      : 'bg-transparent text-white/60 border-white/20'
+                  }`}
+                >
+                  Public
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAudience('close_friends')}
+                  className={`px-3 py-1 rounded-full text-[8px] font-display uppercase tracking-wider border transition-colors cursor-pointer ${
+                    audience === 'close_friends' 
+                      ? 'bg-[#34C759] text-white border-[#34C759] font-bold shadow-[1px_1px_0px_#111]' 
+                      : 'bg-transparent text-white/60 border-white/20'
+                  }`}
+                >
+                  ⭐ Close Friends
+                </button>
+              </div>
             </div>
           )}
 

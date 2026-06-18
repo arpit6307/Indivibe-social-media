@@ -44,6 +44,11 @@ export default function CreateTab({
   // Caption (Post only)
   const [caption, setCaption] = useState('');
 
+  // Text Overlay state
+  const [overlayText, setOverlayText] = useState('');
+  const [textColor, setTextColor] = useState('#ffffff');
+  const [textBg, setTextBg] = useState(true);
+
   // Start Camera
   const startCamera = async () => {
     try {
@@ -147,6 +152,140 @@ export default function CreateTab({
     setCapturedImage(null);
     setSelectedSong(null);
     setCameraError(false);
+    setOverlayText('');
+  };
+
+  // Compile image with text overlay and optional 9:16 crop for stories
+  const compileFinalImage = (): Promise<string> => {
+    return new Promise((resolve) => {
+      if (!capturedImage) return resolve('');
+      
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const isStory = uploadType === 'story';
+
+        if (isStory) {
+          // Force 9:16 aspect ratio crop
+          const targetAspect = 9 / 16;
+          let cropWidth = img.width;
+          let cropHeight = img.height;
+          let sx = 0;
+          let sy = 0;
+          
+          if (img.width / img.height > targetAspect) {
+            cropWidth = img.height * targetAspect;
+            sx = (img.width - cropWidth) / 2;
+          } else {
+            cropHeight = img.width / targetAspect;
+            sy = (img.height - cropHeight) / 2;
+          }
+          
+          canvas.width = 1080;
+          canvas.height = 1920;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, sx, sy, cropWidth, cropHeight, 0, 0, 1080, 1920);
+            
+            // Draw text overlay if it exists
+            if (overlayText.trim()) {
+              const fontSize = 54;
+              ctx.font = `bold ${fontSize}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              
+              const x = 540;
+              const y = 864;
+              const padding = fontSize * 0.5;
+              
+              const metrics = ctx.measureText(overlayText);
+              const textWidth = metrics.width;
+              const textHeight = fontSize;
+              
+              if (textBg) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                const rectX = x - textWidth / 2 - padding;
+                const rectY = y - textHeight / 2 - padding / 2;
+                const rectW = textWidth + padding * 2;
+                const rectH = textHeight + padding;
+                const radius = fontSize * 0.3;
+                
+                ctx.beginPath();
+                ctx.moveTo(rectX + radius, rectY);
+                ctx.lineTo(rectX + rectW - radius, rectY);
+                ctx.quadraticCurveTo(rectX + rectW, rectY, rectX + rectW, rectY + radius);
+                ctx.lineTo(rectX + rectW, rectY + rectH - radius);
+                ctx.quadraticCurveTo(rectX + rectW, rectY + rectH, rectX + rectW - radius, rectY + rectH);
+                ctx.lineTo(rectX + radius, rectY + rectH);
+                ctx.quadraticCurveTo(rectX, rectY + rectH, rectX, rectY + rectH - radius);
+                ctx.lineTo(rectX, rectY + radius);
+                ctx.quadraticCurveTo(rectX, rectY, rectX + radius, rectY);
+                ctx.closePath();
+                ctx.fill();
+              }
+              
+              ctx.fillStyle = textColor;
+              ctx.fillText(overlayText, x, y + fontSize * 0.05);
+            }
+            resolve(canvas.toDataURL('image/jpeg', 0.95));
+          } else {
+            resolve(capturedImage);
+          }
+        } else {
+          // Standard post compile
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            
+            if (overlayText.trim()) {
+              const fontSize = Math.round(canvas.width * 0.05);
+              ctx.font = `bold ${fontSize}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              
+              const x = canvas.width / 2;
+              const y = canvas.height * 0.45;
+              const padding = fontSize * 0.5;
+              
+              const metrics = ctx.measureText(overlayText);
+              const textWidth = metrics.width;
+              const textHeight = fontSize;
+              
+              if (textBg) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                const rectX = x - textWidth / 2 - padding;
+                const rectY = y - textHeight / 2 - padding / 2;
+                const rectW = textWidth + padding * 2;
+                const rectH = textHeight + padding;
+                const radius = fontSize * 0.3;
+                
+                ctx.beginPath();
+                ctx.moveTo(rectX + radius, rectY);
+                ctx.lineTo(rectX + rectW - radius, rectY);
+                ctx.quadraticCurveTo(rectX + rectW, rectY, rectX + rectW, rectY + radius);
+                ctx.lineTo(rectX + rectW, rectY + rectH - radius);
+                ctx.quadraticCurveTo(rectX + rectW, rectY + rectH, rectX + rectW - radius, rectY + rectH);
+                ctx.lineTo(rectX + radius, rectY + rectH);
+                ctx.quadraticCurveTo(rectX, rectY + rectH, rectX, rectY + rectH - radius);
+                ctx.lineTo(rectX, rectY + radius);
+                ctx.quadraticCurveTo(rectX, rectY, rectX + radius, rectY);
+                ctx.closePath();
+                ctx.fill();
+              }
+              
+              ctx.fillStyle = textColor;
+              ctx.fillText(overlayText, x, y + fontSize * 0.05);
+            }
+            resolve(canvas.toDataURL('image/jpeg', 0.95));
+          } else {
+            resolve(capturedImage);
+          }
+        }
+      };
+      img.src = capturedImage;
+    });
   };
 
   // Submit / Publish
@@ -162,13 +301,14 @@ export default function CreateTab({
     addToast("Uploading media to cloud space...", "info");
 
     try {
-      let finalMediaUrl = capturedImage;
+      const compiledBase64 = await compileFinalImage();
+      let finalMediaUrl = compiledBase64;
 
       // Upload to Cloudinary
       try {
         const response = await fetch('/api/cloudinary', {
           method: 'POST',
-          body: JSON.stringify({ file: capturedImage, folder: uploadType === 'story' ? 'indivibe_stories' : 'indivibe_posts' }),
+          body: JSON.stringify({ file: compiledBase64, folder: uploadType === 'story' ? 'indivibe_stories' : 'indivibe_posts' }),
           headers: { 'Content-Type': 'application/json' }
         });
         
@@ -200,7 +340,8 @@ export default function CreateTab({
           finalMediaUrl,
           'image',
           selectedSong || undefined,
-          audience
+          audience,
+          overlayText
         );
         addToast("Story posted successfully for 24 hours!", "success");
       }
@@ -209,6 +350,7 @@ export default function CreateTab({
       setCapturedImage(null);
       setSelectedSong(null);
       setCaption('');
+      setOverlayText('');
       setIsUploading(false);
       onNavigateToTab('feed');
 
@@ -292,7 +434,11 @@ export default function CreateTab({
         )}
 
         {/* Viewport Frame */}
-        <Card className="p-0 border-3 border-pure-black bg-[#111] shadow-[4px_4px_0px_#111] overflow-hidden min-h-[350px] flex flex-col items-center justify-center relative">
+        <div className={`p-0 bg-[#111] overflow-hidden flex flex-col items-center justify-center relative ${
+          !capturedImage && !cameraError
+            ? 'fixed inset-0 z-50 md:relative md:inset-auto md:z-0 md:h-[450px] md:min-h-0 md:brutal-border md:border-3 md:shadow-[4px_4px_0px_#111] md:rounded-lg' 
+            : 'w-full h-[350px] md:h-[450px] brutal-border border-3 shadow-[4px_4px_0px_#111] rounded-lg'
+        }`}>
           
           {!capturedImage ? (
             /* CAMERA STATE */
@@ -311,7 +457,14 @@ export default function CreateTab({
                 </div>
 
                 {/* Floating Camera controls */}
-                <div className="absolute top-4 left-4 right-4 flex justify-between z-10">
+                <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-10">
+                  <button
+                    type="button"
+                    onClick={() => setCameraError(true)}
+                    className="w-10 h-10 rounded-full bg-pure-black/60 border border-white/20 text-white flex items-center justify-center hover:bg-pure-black transition-colors cursor-pointer md:hidden"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setFlashOn(!flashOn)}
@@ -383,6 +536,20 @@ export default function CreateTab({
             <div className="w-full h-full relative aspect-square flex items-center justify-center bg-[#0d0d0d]">
               <img src={capturedImage} alt="Captured preview" className="max-h-[350px] w-full object-contain" />
               
+              {/* Dynamic Text Overlay Render */}
+              {overlayText.trim() && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[80%] text-center">
+                  <span 
+                    style={{ color: textColor }}
+                    className={`px-4 py-2 text-sm md:text-lg font-bold block rounded-xl break-words leading-relaxed ${
+                      textBg ? 'bg-pure-black/65 backdrop-blur-xs brutal-border text-white' : ''
+                    }`}
+                  >
+                    {overlayText}
+                  </span>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleRetake}
@@ -400,7 +567,52 @@ export default function CreateTab({
             onChange={handleFileChange}
             className="hidden"
           />
-        </Card>
+        </div>
+
+        {/* Text Overlay Controls */}
+        {capturedImage && (
+          <div className="space-y-3 p-4 bg-white brutal-border border-2 border-pure-black shadow-[3px_3px_0px_#111] rounded-lg">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-display uppercase tracking-wider text-mid-gray flex items-center gap-1">
+                <Type className="w-4 h-4 text-pure-black" /> Text Overlay
+              </label>
+              <button
+                type="button"
+                onClick={() => setTextBg(!textBg)}
+                className={`px-2.5 py-1 text-[9px] font-display uppercase tracking-wider brutal-border border rounded cursor-pointer transition-colors ${
+                  textBg ? 'bg-brutal-yellow text-pure-black shadow-[1.5px_1.5px_0px_#111]' : 'bg-transparent text-mid-gray border-light-gray'
+                }`}
+              >
+                Bg Shield: {textBg ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Type overlay text (e.g. @username or #hashtag)..."
+              value={overlayText}
+              onChange={(e) => setOverlayText(e.target.value)}
+              className="w-full bg-white text-pure-black font-bold text-xs brutal-border p-2.5 rounded-lg shadow-[2px_2px_0px_#111] outline-none"
+              maxLength={60}
+            />
+
+            <div className="flex gap-2 justify-center pt-1">
+              {['#ffffff', '#FFE834', '#000000', '#FF3B30', '#34C759', '#007AFF'].map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setTextColor(color)}
+                  className="w-6 h-6 rounded-full border border-pure-black flex items-center justify-center cursor-pointer shadow-[1px_1px_0px_#111]"
+                  style={{ backgroundColor: color }}
+                >
+                  {textColor === color && (
+                    <div className={`w-1.5 h-1.5 rounded-full ${color === '#ffffff' || color === '#FFE834' ? 'bg-black' : 'bg-white'}`}></div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Audio Track Selector & Trim Detail Area */}
         {capturedImage && (

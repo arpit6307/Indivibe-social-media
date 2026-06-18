@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Heart, MessageCircle, Send, Plus, Volume2, VolumeX, ChevronLeft, ChevronRight, X, Play, Pause, Eye, Music } from 'lucide-react';
+import { Heart, MessageCircle, Send, Plus, Volume2, VolumeX, ChevronLeft, ChevronRight, X, Play, Pause, Eye, Music, Trash2, Star } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useUIStore } from '@/store/uiStore';
@@ -168,11 +168,70 @@ export default function FeedTab({
     activePostAudioRef.current = { postId: post.postId, audio, timer };
   };
 
+  const renderParsedCaption = (text: string) => {
+    if (!text) return null;
+    const regex = /(\s+|^)(@[a-zA-Z0-9_]+|#[a-zA-Z0-9_]+)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const matchIndex = match.index + match[1].length;
+      const matchText = match[2];
+      if (matchIndex > lastIndex) {
+        parts.push(text.substring(lastIndex, matchIndex));
+      }
+      if (matchText.startsWith('@')) {
+        const username = matchText.substring(1);
+        parts.push(
+          <span
+            key={`mention-${matchIndex}`}
+            onClick={async (e) => {
+              e.stopPropagation();
+              addToast(`Seeking space traveler @${username}...`, "info");
+              const targetProfile = await socialService.getUserProfile(username);
+              if (targetProfile && targetProfile.uid) {
+                onViewProfile(targetProfile.uid);
+              } else {
+                addToast(`Traveler @${username} not found`, "error");
+              }
+            }}
+            className="text-brutal-yellow hover:underline cursor-pointer font-bold bg-[#FFE834]/15 px-1 rounded-sm select-none inline-block border border-brutal-yellow/20"
+          >
+            {matchText}
+          </span>
+        );
+      } else if (matchText.startsWith('#')) {
+        const hashtag = matchText.substring(1);
+        parts.push(
+          <span
+            key={`hashtag-${matchIndex}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              addToast(`Navigating directory to tag #${hashtag}...`, "info");
+              onNavigateToTab('search');
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('indivibe_initial_search_query', matchText);
+              }
+            }}
+            className="text-mid-gray hover:underline cursor-pointer font-bold bg-light-gray px-1 rounded-sm select-none inline-block border border-mid-gray/20"
+          >
+            {matchText}
+          </span>
+        );
+      }
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+    return parts.length > 0 ? parts : text;
+  };
+
   const loadFeedData = async () => {
     setLoading(true);
     try {
       const allPosts = await socialService.getPosts();
-      const allStories = await socialService.getStories();
+      const allStories = await socialService.getStories(currentUserId);
       setPosts(allPosts);
       setStories(allStories);
     } catch (err) {
@@ -353,53 +412,86 @@ export default function FeedTab({
       <div className="brutal-border bg-white p-4 rounded-lg shadow-[4px_4px_0px_#111] overflow-x-auto flex gap-4 select-none scrollbar-none">
         
         {/* Post new story shortcut bubble */}
-        <div 
-          className="flex flex-col items-center shrink-0 cursor-pointer"
-          onClick={() => setIsCameraOpen(true)}
-        >
-          <div className="w-16 h-16 rounded-full brutal-border p-0.5 bg-white relative mb-1.5 hover:scale-105 transition-transform">
-            <div className="w-full h-full rounded-full overflow-hidden bg-white">
-              <img
-                src={currentUserProfile?.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + currentUserUsername}
-                alt="Your Avatar"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            {/* Small Plus icon badge */}
-            <div className="absolute bottom-0 right-0 w-5.5 h-5.5 rounded-full bg-brutal-yellow brutal-border flex items-center justify-center shadow-[1px_1px_0px_#111]">
-              <Plus className="w-3.5 h-3.5 text-pure-black stroke-[3]" />
-            </div>
-          </div>
-          <span className="text-[10px] font-extrabold uppercase text-pure-black">Your Story</span>
-        </div>
-
-        {/* Story User list */}
-        {Object.entries(storiesByUser).map(([uid, userStories]) => {
-          const firstStory = userStories[0];
-          const hasUnseen = true; // Can expand to track seen/unseen
+        {(() => {
+          const currentUserStories = storiesByUser[currentUserId] || [];
+          const hasActiveStories = currentUserStories.length > 0;
+          const isCF = currentUserStories.some(s => s.audience === 'close_friends');
+          
           return (
             <div 
-              key={uid} 
               className="flex flex-col items-center shrink-0 cursor-pointer"
-              onClick={() => openStoryViewer(userStories)}
+              onClick={() => {
+                if (hasActiveStories) {
+                  openStoryViewer(currentUserStories);
+                } else {
+                  setIsCameraOpen(true);
+                }
+              }}
             >
               <div className={`w-16 h-16 rounded-full p-0.5 border-2 ${
-                hasUnseen ? 'border-dashed border-error-red animate-pulse' : 'border-pure-black'
-              } mb-1.5`}>
+                hasActiveStories 
+                  ? isCF 
+                    ? 'border-dashed border-[#34C759] animate-pulse' 
+                    : 'border-dashed border-error-red animate-pulse' 
+                  : 'border-pure-black'
+              } mb-1.5 relative`}>
                 <div className="w-full h-full rounded-full overflow-hidden bg-white brutal-border">
                   <img
-                    src={firstStory.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=default'}
-                    alt={firstStory.username}
+                    src={currentUserProfile?.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + currentUserUsername}
+                    alt="Your Avatar"
                     className="w-full h-full object-cover"
                   />
                 </div>
+                {/* Small Plus icon badge (Always clickable to add story) */}
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCameraOpen(true);
+                  }}
+                  className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-brutal-yellow brutal-border border flex items-center justify-center shadow-[1px_1px_0px_#111] hover:scale-110 active:scale-95 transition-transform"
+                >
+                  <Plus className="w-3.5 h-3.5 text-pure-black stroke-[3]" />
+                </div>
               </div>
-              <span className="text-[10px] font-extrabold uppercase text-pure-black max-w-[70px] truncate">
-                @{firstStory.username}
-              </span>
+              <span className="text-[10px] font-extrabold uppercase text-pure-black">Your Story</span>
             </div>
           );
-        })}
+        })()}
+
+        {/* Story User list */}
+        {Object.entries(storiesByUser)
+          .filter(([uid]) => uid !== currentUserId)
+          .map(([uid, userStories]) => {
+            const firstStory = userStories[0];
+            const hasUnseen = true; // Can expand to track seen/unseen
+            const isCFGroup = userStories.some(s => s.audience === 'close_friends');
+            return (
+              <div 
+                key={uid} 
+                className="flex flex-col items-center shrink-0 cursor-pointer"
+                onClick={() => openStoryViewer(userStories)}
+              >
+                <div className={`w-16 h-16 rounded-full p-0.5 border-2 ${
+                  hasUnseen 
+                    ? isCFGroup 
+                      ? 'border-dashed border-[#34C759] animate-pulse' 
+                      : 'border-dashed border-error-red animate-pulse' 
+                    : 'border-pure-black'
+                } mb-1.5`}>
+                  <div className="w-full h-full rounded-full overflow-hidden bg-white brutal-border">
+                    <img
+                      src={firstStory.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=default'}
+                      alt={firstStory.username}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+                <span className="text-[10px] font-extrabold uppercase text-pure-black max-w-[70px] truncate">
+                  @{firstStory.username}
+                </span>
+              </div>
+            );
+          })}
 
         {stories.length === 0 && (
           <div className="flex-1 flex items-center justify-center text-xs font-bold text-mid-gray uppercase py-4">
@@ -450,9 +542,31 @@ export default function FeedTab({
                       </span>
                     </div>
                   </div>
-                  <span className="text-[10px] font-extrabold uppercase text-mid-gray">
-                    {formatISTDate(post.createdAt)}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-extrabold uppercase text-mid-gray">
+                      {formatISTDate(post.createdAt)}
+                    </span>
+                    {post.uid === currentUserId && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (confirm("Are you sure you want to delete this post?")) {
+                            const success = await socialService.deletePost(post.postId);
+                            if (success) {
+                              addToast("Post deleted successfully!", "success");
+                              loadFeedData();
+                            } else {
+                              addToast("Failed to delete post", "error");
+                            }
+                          }
+                        }}
+                        className="p-1.5 rounded bg-error-red/10 text-error-red border border-error-red/20 hover:bg-error-red hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                        title="Delete Post"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Split Content Body: Media on Left, Details/Comments on Right */}
@@ -529,7 +643,7 @@ export default function FeedTab({
                         <span className="font-display text-sm uppercase mr-2 cursor-pointer hover:underline" onClick={() => onViewProfile(post.uid)}>
                           @{post.username}
                         </span>
-                        {post.caption}
+                        {renderParsedCaption(post.caption)}
                       </div>
 
                       {/* Audio Track Badge */}
@@ -671,12 +785,52 @@ export default function FeedTab({
                     {activeStoryGroup[activeStoryIndex].username}
                   </span>
                   <span className="block text-[8px] font-bold text-light-gray drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                    Active Story
+                    {activeStoryGroup[activeStoryIndex].audience === 'close_friends' ? (
+                      <span className="text-[#34C759] flex items-center gap-0.5">⭐ Close Friends Only</span>
+                    ) : (
+                      'Active Story'
+                    )}
                   </span>
                 </div>
               </div>
 
               <div className="flex gap-2.5">
+                {activeStoryGroup[activeStoryIndex].uid === currentUserId && (
+                  <button
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to delete this story?")) {
+                        setStoryPaused(true);
+                        const currentStory = activeStoryGroup[activeStoryIndex];
+                        const success = await socialService.deleteStory(currentStory.storyId);
+                        if (success) {
+                          addToast("Story deleted!", "success");
+                          // Filter out deleted story from active group
+                          const updatedGroup = activeStoryGroup.filter(s => s.storyId !== currentStory.storyId);
+                          if (updatedGroup.length === 0) {
+                            // Close player
+                            setActiveStoryGroup(null);
+                            setActiveStoryIndex(0);
+                          } else {
+                            // If we deleted the last slide, go back one
+                            const nextIndex = activeStoryIndex >= updatedGroup.length ? updatedGroup.length - 1 : activeStoryIndex;
+                            setActiveStoryGroup(updatedGroup);
+                            setActiveStoryIndex(nextIndex);
+                            setStoryProgress(0);
+                            setStoryPaused(false);
+                          }
+                          loadFeedData();
+                        } else {
+                          addToast("Failed to delete story", "error");
+                          setStoryPaused(false);
+                        }
+                      }
+                    }}
+                    className="p-1 text-[#FF3B30] bg-pure-black/35 rounded hover:bg-[#FF3B30]/10 focus:outline-none"
+                    title="Delete story"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   onClick={() => setStoryPaused(!storyPaused)}
                   className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"

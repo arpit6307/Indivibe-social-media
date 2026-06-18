@@ -60,6 +60,17 @@ export default function SearchTab({
     loadSuggestions();
   }, [currentUserId]);
 
+  // Read initial tag query if routed from FeedTab caption hashtag click
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const initialQuery = localStorage.getItem('indivibe_initial_search_query');
+      if (initialQuery) {
+        setQueryStr(initialQuery);
+        localStorage.removeItem('indivibe_initial_search_query');
+      }
+    }
+  }, []);
+
   // Perform search
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {

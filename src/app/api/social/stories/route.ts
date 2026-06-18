@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   try {
     syncGlobalStore();
     const body = await request.json();
-    const { uid, username, profilePhotoUrl, mediaUrl, mediaType, audioTrack, audience } = body;
+    const { uid, username, profilePhotoUrl, mediaUrl, mediaType, audioTrack, audience, caption } = body;
 
     if (!uid || !username || !mediaUrl) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -113,26 +113,88 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(), // 24 hours expiry
       audience: audience || 'public',
+      caption: caption || '',
       ...(audioTrack ? { audioTrack } : {})
     };
+
+    let storyId = `story-${Math.random().toString(36).substring(2, 9)}`;
 
     if (!isMockFirebase) {
       try {
         const docRef = await addDoc(collection(db, 'stories'), newStory);
-        return NextResponse.json({ ...newStory, storyId: docRef.id });
+        storyId = docRef.id;
       } catch (firestoreErr) {
         console.warn("Firestore create story failed, falling back to local storage:", firestoreErr);
       }
     }
 
-    // Fallback to local server db-mock.json
+    const storyWithId = { ...newStory, storyId };
+
+    // Fallback/Sync to local server db-mock.json
     const globalStore = globalThis as any;
     const stories = globalStore.stories || [];
-    const storyId = `story-${Math.random().toString(36).substring(2, 9)}`;
-    const storyWithId = { ...newStory, storyId };
-    
     stories.unshift(storyWithId);
     globalStore.stories = stories;
+
+    // Handle mentions in caption
+    if (caption && caption.includes('@')) {
+      const mentions = caption.match(/@[a-zA-Z0-9_]+/g) || [];
+      const uniqueMentions = Array.from(new Set(mentions.map(m => m.substring(1).toLowerCase())));
+      
+      const profiles = globalStore.registeredUserProfiles || new Map();
+      
+      for (const mUsername of uniqueMentions) {
+        // Find target user by username
+        let targetUser: any = null;
+        for (const p of profiles.values() as any) {
+          if (p.username?.toLowerCase() === mUsername) {
+            targetUser = p;
+            break;
+          }
+        }
+        
+        if (targetUser && targetUser.uid && targetUser.uid !== uid) {
+          // Create a story_mention notification
+          const notifId = `notif-${Math.random().toString(36).substring(2, 9)}`;
+          const mentionNotif = {
+            notificationId: notifId,
+            uid: targetUser.uid,
+            senderId: uid,
+            senderUsername: username,
+            senderProfilePhotoUrl: profilePhotoUrl || '',
+            type: 'story_mention',
+            details: 'mentioned you in their story',
+            createdAt: new Date().toISOString(),
+            read: false,
+            storyMediaUrl: mediaUrl,
+            storyAudioTrack: audioTrack || null
+          };
+          
+          if (!isMockFirebase) {
+            try {
+              await addDoc(collection(db, 'notifications'), {
+                uid: targetUser.uid,
+                senderId: uid,
+                senderUsername: username,
+                senderProfilePhotoUrl: profilePhotoUrl || '',
+                type: 'story_mention',
+                details: 'mentioned you in their story',
+                createdAt: mentionNotif.createdAt,
+                read: false,
+                storyMediaUrl: mediaUrl,
+                storyAudioTrack: audioTrack || null
+              });
+            } catch (firestoreErr) {
+              console.warn("Failed to save mention notification to Firestore:", firestoreErr);
+            }
+          }
+          
+          const notifications = globalStore.notifications || [];
+          notifications.unshift(mentionNotif);
+          globalStore.notifications = notifications;
+        }
+      }
+    }
 
     persistGlobalStore();
     return NextResponse.json(storyWithId);

@@ -30,6 +30,8 @@ export default function SearchProfileView({
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [myProfile, setMyProfile] = useState<any>(null);
+  const [isCloseFriend, setIsCloseFriend] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activePost, setActivePost] = useState<Post | null>(null);
 
@@ -46,10 +48,15 @@ export default function SearchProfileView({
       if (targetProf) {
         setProfile(targetProf);
         
-        // Fetch follow status
-        const myProfile = await socialService.getUserProfile(currentUserId);
-        const following = myProfile?.following || [];
+        // Fetch follow status & Close Friends
+        const myProf = await socialService.getUserProfile(currentUserId);
+        setMyProfile(myProf);
+        
+        const following = myProf?.following || [];
         setIsFollowing(following.includes(targetUserId));
+        
+        const closeFriends = myProf?.closeFriends || [];
+        setIsCloseFriend(closeFriends.includes(targetUserId));
         
         // Fetch posts
         const allPosts = await socialService.getPosts();
@@ -82,6 +89,29 @@ export default function SearchProfileView({
       onRefreshProfile?.();
     } catch (err: any) {
       addToast(err.message || "Failed to follow", "error");
+    }
+  const handleCloseFriendToggle = async () => {
+    if (!profile || !myProfile) return;
+    try {
+      const currentCloseFriends = myProfile.closeFriends || [];
+      let newCloseFriends: string[];
+      if (isCloseFriend) {
+        newCloseFriends = currentCloseFriends.filter((id: string) => id !== targetUserId);
+      } else {
+        newCloseFriends = [...currentCloseFriends, targetUserId];
+      }
+
+      await socialService.updateProfile(currentUserId, {
+        ...myProfile,
+        closeFriends: newCloseFriends
+      });
+
+      setIsCloseFriend(!isCloseFriend);
+      setMyProfile((prev: any) => prev ? { ...prev, closeFriends: newCloseFriends } : null);
+      addToast(!isCloseFriend ? `Added @${profile.username} to Close Friends! ⭐` : `Removed @${profile.username} from Close Friends`, "success");
+      if (onRefreshProfile) onRefreshProfile();
+    } catch (err: any) {
+      addToast(err.message || "Failed to update Close Friends", "error");
     }
   };
 
@@ -210,6 +240,15 @@ export default function SearchProfileView({
                   onClick={handleCreateChat}
                 >
                   Send Message
+                </Button>
+                <Button 
+                  variant={isCloseFriend ? 'primary' : 'secondary'} 
+                  className={`py-1 px-4 text-[10px] font-display uppercase shadow-none flex items-center gap-1 border-pure-black ${
+                    isCloseFriend ? 'bg-[#34C759] hover:bg-[#2db34f] text-white border-[#34C759]' : ''
+                  }`}
+                  onClick={handleCloseFriendToggle}
+                >
+                  ⭐ {isCloseFriend ? 'Close Friend' : 'Add Close Friend'}
                 </Button>
               </>
             )}

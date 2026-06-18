@@ -51,6 +51,7 @@ export interface Story {
     startTime: number;
   };
   audience?: 'public' | 'close_friends';
+  caption?: string;
 }
 
 export interface Message {
@@ -83,10 +84,12 @@ export interface Notification {
   senderId: string;
   senderUsername: string;
   senderProfilePhotoUrl?: string;
-  type: 'like' | 'comment' | 'follow' | 'follow_request' | 'follow_accept';
+  type: 'like' | 'comment' | 'follow' | 'follow_request' | 'follow_accept' | 'story_mention';
   details?: string;
   createdAt: string;
   read: boolean;
+  storyMediaUrl?: string;
+  storyAudioTrack?: any;
 }
 
 export interface CallState {
@@ -217,7 +220,7 @@ export const socialService = {
     }
   },
 
-  async updateProfile(uid: string, profileData: { displayName: string; bio: string; profilePhotoUrl: string }): Promise<void> {
+  async updateProfile(uid: string, profileData: any): Promise<void> {
     try {
       const res = await fetch(`/api/social/users/update`, {
         method: 'POST',
@@ -318,13 +321,14 @@ export const socialService = {
     mediaUrl: string, 
     mediaType: 'image' | 'video',
     audioTrack?: any,
-    audience?: 'public' | 'close_friends'
+    audience?: 'public' | 'close_friends',
+    caption?: string
   ): Promise<Story> {
     try {
       const res = await fetch(`/api/social/stories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid, username, profilePhotoUrl, mediaUrl, mediaType, audioTrack, audience })
+        body: JSON.stringify({ uid, username, profilePhotoUrl, mediaUrl, mediaType, audioTrack, audience, caption })
       });
       if (!res.ok) throw new Error("Failed to create story");
       return await res.json();

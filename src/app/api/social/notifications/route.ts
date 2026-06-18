@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   try {
     syncGlobalStore();
     const body = await request.json();
-    const { uid, senderId, senderUsername, type, details, markRead, senderProfilePhotoUrl } = body;
+    const { uid, senderId, senderUsername, type, details, markRead, senderProfilePhotoUrl, storyMediaUrl, storyAudioTrack } = body;
 
     if (!uid) {
       return NextResponse.json({ error: 'Missing uid' }, { status: 400 });
@@ -145,7 +145,9 @@ export async function POST(request: Request) {
       type,
       details: details || (type === 'follow' ? 'started following you' : type === 'like' ? 'liked your post' : 'commented on your post'),
       createdAt: new Date().toISOString(),
-      read: false
+      read: false,
+      ...(storyMediaUrl ? { storyMediaUrl } : {}),
+      ...(storyAudioTrack ? { storyAudioTrack } : {})
     };
 
     if (!isMockFirebase) {
