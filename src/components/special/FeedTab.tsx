@@ -45,6 +45,8 @@ export default function FeedTab({
   const activePostAudioRef = useRef<{ postId: string; audio: HTMLAudioElement; timer: NodeJS.Timeout | null } | null>(null);
   const activeStoryAudioRef = useRef<HTMLAudioElement | null>(null);
   const storyAudioTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const activeStoryVideoRef = useRef<HTMLVideoElement | null>(null);
+
 
   const addToast = useUIStore((state) => state.addToast);
   const storyTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -373,6 +375,27 @@ export default function FeedTab({
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
     };
   }, [activeStoryGroup, activeStoryIndex, storyPaused]);
+
+  // Sync HTML5 video play/pause and handle mobile/browser autoplay blocks
+  useEffect(() => {
+    const video = activeStoryVideoRef.current;
+    if (!video) return;
+
+    if (storyPaused) {
+      video.pause();
+    } else {
+      // playsInline is already set on the element. Call play() explicitly.
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(err => {
+          console.warn("Autoplay block detected, muting to force play", err);
+          video.muted = true;
+          video.play().catch(e => console.error("Video play failed completely:", e));
+        });
+      }
+    }
+  }, [storyPaused, activeStoryIndex, activeStoryGroup]);
+
 
   const handleNextStory = () => {
     if (!activeStoryGroup) return;
@@ -797,41 +820,54 @@ export default function FeedTab({
 
               <div className="flex gap-2.5">
                 {activeStoryGroup[activeStoryIndex].uid === currentUserId && (
-                  <button
-                    onClick={async () => {
-                      if (confirm("Are you sure you want to delete this story?")) {
-                        setStoryPaused(true);
-                        const currentStory = activeStoryGroup[activeStoryIndex];
-                        const success = await socialService.deleteStory(currentStory.storyId);
-                        if (success) {
-                          addToast("Story deleted!", "success");
-                          // Filter out deleted story from active group
-                          const updatedGroup = activeStoryGroup.filter(s => s.storyId !== currentStory.storyId);
-                          if (updatedGroup.length === 0) {
-                            // Close player
-                            setActiveStoryGroup(null);
-                            setActiveStoryIndex(0);
+                  <>
+                    <button
+                      onClick={() => {
+                        setActiveStoryGroup(null);
+                        setIsCameraOpen(true);
+                      }}
+                      className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-display uppercase tracking-wider text-pure-black bg-brutal-yellow brutal-border border rounded hover:scale-105 active:scale-95 transition-transform"
+                      title="Add another story slide"
+                    >
+                      <Plus className="w-3 h-3 stroke-[3]" /> Add Slide
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (confirm("Are you sure you want to delete this story?")) {
+                          setStoryPaused(true);
+                          const currentStory = activeStoryGroup[activeStoryIndex];
+                          const success = await socialService.deleteStory(currentStory.storyId);
+                          if (success) {
+                            addToast("Story deleted!", "success");
+                            // Filter out deleted story from active group
+                            const updatedGroup = activeStoryGroup.filter(s => s.storyId !== currentStory.storyId);
+                            if (updatedGroup.length === 0) {
+                              // Close player
+                              setActiveStoryGroup(null);
+                              setActiveStoryIndex(0);
+                            } else {
+                              // If we deleted the last slide, go back one
+                              const nextIndex = activeStoryIndex >= updatedGroup.length ? updatedGroup.length - 1 : activeStoryIndex;
+                              setActiveStoryGroup(updatedGroup);
+                              setActiveStoryIndex(nextIndex);
+                              setStoryProgress(0);
+                              setStoryPaused(false);
+                            }
+                            loadFeedData();
                           } else {
-                            // If we deleted the last slide, go back one
-                            const nextIndex = activeStoryIndex >= updatedGroup.length ? updatedGroup.length - 1 : activeStoryIndex;
-                            setActiveStoryGroup(updatedGroup);
-                            setActiveStoryIndex(nextIndex);
-                            setStoryProgress(0);
+                            addToast("Failed to delete story", "error");
                             setStoryPaused(false);
                           }
-                          loadFeedData();
-                        } else {
-                          addToast("Failed to delete story", "error");
-                          setStoryPaused(false);
                         }
-                      }
-                    }}
-                    className="p-1 text-[#FF3B30] bg-pure-black/35 rounded hover:bg-[#FF3B30]/10 focus:outline-none"
-                    title="Delete story"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                      }}
+                      className="p-1 text-[#FF3B30] bg-pure-black/35 rounded hover:bg-[#FF3B30]/10 focus:outline-none flex items-center justify-center"
+                      title="Delete story"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
                 )}
+
                 <button
                   onClick={() => setStoryPaused(!storyPaused)}
                   className="p-1 text-white bg-pure-black/35 rounded hover:bg-pure-black/60 focus:outline-none"
@@ -853,12 +889,16 @@ export default function FeedTab({
             <div className="flex-1 bg-pure-black flex items-center justify-center relative">
               {activeStoryGroup[activeStoryIndex].mediaType === 'video' ? (
                 <video
+                  ref={activeStoryVideoRef}
                   src={activeStoryGroup[activeStoryIndex].mediaUrl}
                   autoPlay
                   loop
+                  playsInline
+                  webkit-playsinline="true"
                   muted={!!activeStoryGroup[activeStoryIndex].audioTrack}
                   className="w-full h-full object-contain"
                 />
+
               ) : (
                 <img
                   src={activeStoryGroup[activeStoryIndex].mediaUrl}

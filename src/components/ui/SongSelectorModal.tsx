@@ -7,41 +7,42 @@ import { X, Play, Pause, Music, Volume2, Clock, Search } from 'lucide-react';
 
 export const PRESET_SONGS = [
   {
-    id: 'lofi-1',
-    title: 'Warm Coffee',
-    artist: 'Chillhop Beats',
-    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150&auto=format&fit=crop&q=60'
+    id: "1635014240",
+    title: "Kesariya (From \"Brahmastra\")",
+    artist: "Pritam, Arijit Singh & Amitabh Bhattacharya",
+    audioUrl: "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/38/4c/5c/384c5c8f-3ff8-e457-b2f7-3158ce108649/mzaf_12389299033886433185.plus.aac.p.m4a",
+    coverUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/9f/13/ca/9f13ca3b-e533-03e0-f19a-f0aaa774581d/196589311191.jpg/300x300bb.jpg"
   },
   {
-    id: 'lofi-2',
-    title: 'Midnight Drive',
-    artist: 'Lofi Generator',
-    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=150&auto=format&fit=crop&q=60'
+    id: "1073359419",
+    title: "Tum Hi Ho",
+    artist: "Mithoon & Arijit Singh",
+    audioUrl: "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/38/de/b9/38deb942-d44a-f2bb-205c-ddf05be84693/mzaf_9747647124859107103.plus.aac.p.m4a",
+    coverUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/bb/23/ee/bb23eeed-0c35-4f1d-2b11-485622777ae4/8902894353007_cover.jpg/300x300bb.jpg"
   },
   {
-    id: 'lofi-3',
-    title: 'Rainy Sunday',
-    artist: 'Nostalgia Club',
-    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=150&auto=format&fit=crop&q=60'
+    id: "6766268386",
+    title: "Apna Bana Le - Arijit Singh Vocals Only",
+    artist: "Arijit Singh, Sachin-Jigar & Amitabh Bhattacharya",
+    audioUrl: "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/ff/b2/c2/ffb2c28b-2139-4ec4-f61e-271bc06bddad/mzaf_12403837045914372948.plus.aac.p.m4a",
+    coverUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/65/6f/5f/656f5fc0-4ce3-e03e-b7da-667a289f9e28/8909024114538.png/300x300bb.jpg"
   },
   {
-    id: 'lofi-4',
-    title: 'Summer Breeze',
-    artist: 'Sunny Waves',
-    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=150&auto=format&fit=crop&q=60'
+    id: "1702461667",
+    title: "Chaleya (From \"Jawan\")",
+    artist: "Anirudh Ravichander, Arijit Singh, Shilpa Rao & Kumaar",
+    audioUrl: "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview126/v4/87/61/a9/8761a939-8e1c-678e-b186-09401480b314/mzaf_2211340113577128300.plus.aac.p.m4a",
+    coverUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/1e/ff/32/1eff3216-190d-6fd9-8f68-acbba846e6ee/8903431956026_cover.jpg/300x300bb.jpg"
   },
   {
-    id: 'lofi-5',
-    title: 'Neon Nights',
-    artist: 'Retro Runner',
-    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
-    coverUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=150&auto=format&fit=crop&q=60'
+    id: "1070912818",
+    title: "Kabira",
+    artist: "Pritam, Tochi Raina & Rekha Bhardwaj",
+    audioUrl: "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e2/06/19/e2061998-6444-5c5b-5bfc-a149c55e2e2e/mzaf_10494977375651598168.plus.aac.p.m4a",
+    coverUrl: "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/62/d6/74/62d67432-0670-631f-db6a-d4bac3adae4b/8902894353328_cover.jpg/300x300bb.jpg"
   }
 ];
+
 
 interface SongSelectorModalProps {
   onSelect: (song: {

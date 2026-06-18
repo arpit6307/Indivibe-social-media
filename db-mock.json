@@ -245,7 +245,42 @@
     }
   },
   "posts": [],
-  "stories": [],
+  "stories": [
+    {
+      "uid": "sjuT3RawQKcoaZbXG2wfSXOXpJ72",
+      "username": "arpitsinghyadav18",
+      "profilePhotoUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781701405/indivibe_avatars/veq7plcevixljyfknlb1.png",
+      "mediaUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781775340/indivibe_stories/w2ynmghetywialqnz4zl.jpg",
+      "mediaType": "image",
+      "createdAt": "2026-06-18T09:35:41.525Z",
+      "expiresAt": "2026-06-19T09:35:41.526Z",
+      "audience": "public",
+      "caption": "@akshitsinghyadav24 ",
+      "textPosition": {
+        "x": 13.958706484800349,
+        "y": 95
+      },
+      "textColor": "#ffffff",
+      "textBg": true,
+      "audioTrack": {
+        "title": "Thee Thalapathy",
+        "artist": "Silambarasan TR & Vivek",
+        "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/43/1b/09/431b09fe-336a-8fcc-f9ca-641b1d2ac93f/8903431909145_cover.jpg/300x300bb.jpg",
+        "audioUrl": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview113/v4/a8/a6/44/a8a64498-e5e9-572f-cdb0-1af5cd278773/mzaf_6425324671840606398.plus.aac.p.m4a",
+        "duration": 15,
+        "startTime": 21
+      },
+      "storyId": "story-iwt97ct",
+      "viewers": [
+        {
+          "uid": "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
+          "username": "akshitsinghyadav24",
+          "profilePhotoUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781704893/indivibe_avatars/l2nyy7zzcrnbwc8bn5w5.jpg",
+          "viewedAt": "2026-06-18T09:35:58.966Z"
+        }
+      ]
+    }
+  ],
   "chats": [
     {
       "chatId": "chat-70bun98",
@@ -262,6 +297,46 @@
     "chat-70bun98": []
   },
   "notifications": [
+    {
+      "notificationId": "notif-ie33dwf",
+      "uid": "sjuT3RawQKcoaZbXG2wfSXOXpJ72",
+      "senderId": "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
+      "senderUsername": "akshitsinghyadav24",
+      "senderProfilePhotoUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781704893/indivibe_avatars/l2nyy7zzcrnbwc8bn5w5.jpg",
+      "type": "story_mention",
+      "details": "mentioned you in their story",
+      "createdAt": "2026-06-18T09:36:56.508Z",
+      "read": false,
+      "storyMediaUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781775340/indivibe_stories/w2ynmghetywialqnz4zl.jpg",
+      "storyAudioTrack": {
+        "title": "Thee Thalapathy",
+        "artist": "Silambarasan TR & Vivek",
+        "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/43/1b/09/431b09fe-336a-8fcc-f9ca-641b1d2ac93f/8903431909145_cover.jpg/300x300bb.jpg",
+        "audioUrl": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview113/v4/a8/a6/44/a8a64498-e5e9-572f-cdb0-1af5cd278773/mzaf_6425324671840606398.plus.aac.p.m4a",
+        "duration": 15,
+        "startTime": 21
+      }
+    },
+    {
+      "notificationId": "notif-0jatehw",
+      "uid": "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
+      "senderId": "sjuT3RawQKcoaZbXG2wfSXOXpJ72",
+      "senderUsername": "arpitsinghyadav18",
+      "senderProfilePhotoUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781701405/indivibe_avatars/veq7plcevixljyfknlb1.png",
+      "type": "story_mention",
+      "details": "mentioned you in their story",
+      "createdAt": "2026-06-18T09:35:42.333Z",
+      "read": true,
+      "storyMediaUrl": "https://res.cloudinary.com/dhsyajcf3/image/upload/v1781775340/indivibe_stories/w2ynmghetywialqnz4zl.jpg",
+      "storyAudioTrack": {
+        "title": "Thee Thalapathy",
+        "artist": "Silambarasan TR & Vivek",
+        "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/43/1b/09/431b09fe-336a-8fcc-f9ca-641b1d2ac93f/8903431909145_cover.jpg/300x300bb.jpg",
+        "audioUrl": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview113/v4/a8/a6/44/a8a64498-e5e9-572f-cdb0-1af5cd278773/mzaf_6425324671840606398.plus.aac.p.m4a",
+        "duration": 15,
+        "startTime": 21
+      }
+    },
     {
       "notificationId": "notif-5mis8b4",
       "uid": "8fnRm81ZhHhCdZZVvm0rMrw7e1r2",
