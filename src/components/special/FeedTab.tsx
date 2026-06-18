@@ -144,6 +144,7 @@ export default function FeedTab({
 
         if (!paused) {
           audio.play().catch(err => {
+            if (err.name === 'AbortError') return;
             console.warn("Story audio playback blocked:", err);
             setStoryMuted(true);
             audio.muted = true;
@@ -158,7 +159,10 @@ export default function FeedTab({
           if (audio.currentTime >= endTime || audio.ended) {
             audio.currentTime = track.startTime;
             if (!paused) {
-              audio.play().catch(e => console.warn(e));
+              audio.play().catch(e => {
+                if (e.name === 'AbortError') return;
+                console.warn(e);
+              });
             }
           }
         }, 100);
@@ -191,11 +195,13 @@ export default function FeedTab({
             playPromise.then(() => {
               setIsVideoBuffering(false);
             }).catch(err => {
+              if (err.name === 'AbortError') return;
               console.warn("Autoplay block detected on story video, forcing mute:", err);
               video.muted = true;
               video.play().then(() => {
                 setIsVideoBuffering(false);
               }).catch(e => {
+                if (e.name === 'AbortError') return;
                 console.error("Video play failed completely:", e);
                 setIsVideoBuffering(false);
               });
