@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Heart, MessageCircle, Send, Plus, Volume2, VolumeX, ChevronLeft, ChevronRight, X, Play, Pause, Eye, Music, Trash2, Star } from 'lucide-react';
+import { Heart, MessageCircle, Send, Plus, Volume2, VolumeX, ChevronLeft, ChevronRight, X, Play, Pause, Eye, Music, Trash2, Star, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useUIStore } from '@/store/uiStore';
@@ -36,6 +36,7 @@ export default function FeedTab({
   const [storyProgress, setStoryProgress] = useState(0);
   const [storyPaused, setStoryPaused] = useState(false);
   const [showViewersList, setShowViewersList] = useState(false);
+  const [viewerSearchQuery, setViewerSearchQuery] = useState('');
   const [isVideoBuffering, setIsVideoBuffering] = useState(false);
   const [storyDuration, setStoryDuration] = useState(5000);
   const [storyMuted, setStoryMuted] = useState(false);
@@ -46,9 +47,7 @@ export default function FeedTab({
   // Audio playing states & references
   const [playingPostId, setPlayingPostId] = useState<string | null>(null);
   const activePostAudioRef = useRef<{ postId: string; audio: HTMLAudioElement; timer: NodeJS.Timeout | null } | null>(null);
-  const activeStoryAudioRef = useRef<HTMLAudioElement | null>(
-    typeof window !== 'undefined' ? new Audio() : null
-  );
+  const activeStoryAudioRef = useRef<HTMLAudioElement | null>(null);
   const storyAudioTimerRef = useRef<NodeJS.Timeout | null>(null);
   const activeStoryVideoRef = useRef<HTMLVideoElement | null>(null);
   const lastSyncedRef = useRef<{ storyId: string | null; paused: boolean }>({
@@ -142,56 +141,54 @@ export default function FeedTab({
 
     // 2. Synchronize Audio Track
     if (typeof window !== 'undefined') {
-      if (!activeStoryAudioRef.current) {
-        activeStoryAudioRef.current = new Audio();
-      }
       const audio = activeStoryAudioRef.current;
+      if (audio) {
+        if (story.audioTrack) {
+          const track = story.audioTrack;
+          const targetSrc = track.audioUrl;
 
-      if (story.audioTrack) {
-        const track = story.audioTrack;
-        const targetSrc = track.audioUrl;
+          // Clean up old audio timer before setting new one
+          if (storyAudioTimerRef.current) {
+            clearInterval(storyAudioTimerRef.current);
+            storyAudioTimerRef.current = null;
+          }
 
-        // Clean up old audio timer before setting new one
-        if (storyAudioTimerRef.current) {
-          clearInterval(storyAudioTimerRef.current);
-          storyAudioTimerRef.current = null;
-        }
+          if (audio.src !== targetSrc) {
+            audio.src = targetSrc;
+            audio.load();
+          }
+          audio.currentTime = track.startTime;
+          audio.muted = storyMuted;
 
-        if (audio.src !== targetSrc) {
-          audio.src = targetSrc;
-          audio.load();
-        }
-        audio.currentTime = track.startTime;
-        audio.muted = storyMuted;
+          if (!paused) {
+            audio.play().catch(err => {
+              if (err.name === 'AbortError') return;
+              console.warn("Story audio playback blocked:", err);
+            });
+          } else {
+            audio.pause();
+          }
 
-        if (!paused) {
-          audio.play().catch(err => {
-            if (err.name === 'AbortError') return;
-            console.warn("Story audio playback blocked:", err);
-          });
+          // Loop segment logic within the story slide duration
+          const endTime = track.startTime + track.duration;
+          storyAudioTimerRef.current = setInterval(() => {
+            if (audio.currentTime >= endTime || audio.ended) {
+              audio.currentTime = track.startTime;
+              if (!paused) {
+                audio.play().catch(e => {
+                  if (e.name === 'AbortError') return;
+                  console.warn(e);
+                });
+              }
+            }
+          }, 100);
         } else {
           audio.pause();
-        }
-
-        // Loop segment logic within the story slide duration
-        const endTime = track.startTime + track.duration;
-        storyAudioTimerRef.current = setInterval(() => {
-          if (audio.currentTime >= endTime || audio.ended) {
-            audio.currentTime = track.startTime;
-            if (!paused) {
-              audio.play().catch(e => {
-                if (e.name === 'AbortError') return;
-                console.warn(e);
-              });
-            }
+          audio.src = '';
+          if (storyAudioTimerRef.current) {
+            clearInterval(storyAudioTimerRef.current);
+            storyAudioTimerRef.current = null;
           }
-        }, 100);
-      } else {
-        audio.pause();
-        audio.src = '';
-        if (storyAudioTimerRef.current) {
-          clearInterval(storyAudioTimerRef.current);
-          storyAudioTimerRef.current = null;
         }
       }
     }
@@ -323,8 +320,11 @@ export default function FeedTab({
 
     if (activeStoryAudioRef.current) {
       activeStoryAudioRef.current.pause();
-      if (storyAudioTimerRef.current) clearInterval(storyAudioTimerRef.current);
-      activeStoryAudioRef.current = null;
+      activeStoryAudioRef.current.src = '';
+      if (storyAudioTimerRef.current) {
+        clearInterval(storyAudioTimerRef.current);
+        storyAudioTimerRef.current = null;
+      }
     }
 
     const track = post.audioTrack;
@@ -1119,6 +1119,11 @@ export default function FeedTab({
 
           {/* Story Viewer screen */}
           <div className="flex-1 bg-pure-black flex items-center justify-center relative">
+            <audio
+              ref={activeStoryAudioRef}
+              playsInline
+              className="hidden"
+            />
             <video
               ref={activeStoryVideoRef}
               loop
@@ -1213,6 +1218,7 @@ export default function FeedTab({
                   onClick={() => {
                     setStoryPaused(true);
                     setShowViewersList(true);
+                    setViewerSearchQuery('');
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-pure-black/70 hover:bg-pure-black border border-white/25 text-white rounded text-xs font-bold transition-all cursor-pointer shadow-[2px_2px_0px_rgba(255,255,255,0.25)] active:translate-x-0.5 active:translate-y-0.5"
                 >
@@ -1231,63 +1237,100 @@ export default function FeedTab({
         </div>
       </div>
 
-      {/* STORY VIEWERS LIST MODAL */}
-      {showViewersList && activeStoryGroup?.[activeStoryIndex] && (
-        <div className="fixed inset-0 z-50 bg-pure-black/80 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-white brutal-border border-3 shadow-[8px_8px_0px_#111] p-5 rounded-lg text-pure-black flex flex-col max-h-[70vh]">
-            <div className="flex justify-between items-center border-b-2 border-pure-black pb-3 mb-4">
-              <h4 className="font-display text-sm uppercase flex items-center gap-1.5">
-                <Eye className="w-4 h-4 text-pure-black" />
-                Story Viewers ({(activeStoryGroup?.[activeStoryIndex] as any)?.viewers?.length || 0})
-              </h4>
-              <button 
-                onClick={() => {
-                  setShowViewersList(false);
-                  setStoryPaused(false);
-                }}
-                className="p-1 rounded brutal-border bg-white text-pure-black hover:bg-light-gray cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-              {!(activeStoryGroup?.[activeStoryIndex] as any)?.viewers || (activeStoryGroup?.[activeStoryIndex] as any)?.viewers.length === 0 ? (
-                <p className="text-center py-6 text-xs font-bold text-mid-gray uppercase">
-                  No viewers yet.
-                </p>
-              ) : (
-                ((activeStoryGroup?.[activeStoryIndex] as any)?.viewers || []).map((viewer: any) => (
-                  <div key={viewer.uid} className="flex items-center justify-between bg-light-gray/40 brutal-border p-2 rounded">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full overflow-hidden brutal-border bg-white">
-                        <img
-                          src={viewer.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + viewer.username}
-                          alt={viewer.username}
-                          className="w-full h-full object-cover"
-                        />
+      {/* STORY VIEWERS LIST MODAL (Instagram-style Bottom Sheet) */}
+      {showViewersList && activeStoryGroup?.[activeStoryIndex] && (() => {
+        const viewers = (activeStoryGroup?.[activeStoryIndex] as any)?.viewers || [];
+        const filteredViewers = viewers.filter((v: any) =>
+          v.username.toLowerCase().includes(viewerSearchQuery.toLowerCase())
+        );
+
+        return (
+          <div className="fixed inset-0 z-50 bg-pure-black/80 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4">
+            <div className="w-full max-w-md bg-white border-t-4 md:border-4 border-pure-black rounded-t-2xl md:rounded-lg h-[65vh] md:h-[50vh] flex flex-col shadow-[0_-8px_30px_rgba(0,0,0,0.2)] md:shadow-[8px_8px_0px_#111] text-pure-black overflow-hidden">
+              {/* Drag handle for mobile */}
+              <div className="w-12 h-1 bg-mid-gray/30 rounded-full mx-auto my-3 md:hidden shrink-0" />
+              
+              {/* Header */}
+              <div className="flex justify-between items-center px-5 pb-3 border-b-2 border-pure-black pt-1 md:pt-4 shrink-0">
+                <h4 className="font-display text-xs md:text-sm uppercase flex items-center gap-1.5 font-extrabold tracking-wider">
+                  <Eye className="w-4 h-4 text-pure-black" />
+                  Story Viewers ({viewers.length})
+                </h4>
+                <button 
+                  onClick={() => {
+                    setShowViewersList(false);
+                    setStoryPaused(false);
+                  }}
+                  className="p-1 rounded brutal-border bg-white text-pure-black hover:bg-light-gray cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="px-5 pt-3 pb-2 shrink-0">
+                <div className="relative flex items-center">
+                  <Search className="absolute left-3 w-4 h-4 text-mid-gray pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search username..."
+                    value={viewerSearchQuery}
+                    onChange={(e) => setViewerSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-light-gray brutal-border text-xs outline-none font-bold text-pure-black placeholder:text-mid-gray rounded shadow-[2px_2px_0px_#111] focus:bg-white transition-colors"
+                  />
+                  {viewerSearchQuery && (
+                    <button
+                      onClick={() => setViewerSearchQuery('')}
+                      className="absolute right-3 text-xs font-bold text-mid-gray hover:text-pure-black"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Viewers List */}
+              <div className="flex-1 overflow-y-auto px-5 py-2 space-y-2.5 scrollbar-none">
+                {filteredViewers.length === 0 ? (
+                  <p className="text-center py-8 text-xs font-bold text-mid-gray uppercase tracking-wider">
+                    {viewerSearchQuery ? 'No matching viewers' : 'No viewers yet'}
+                  </p>
+                ) : (
+                  filteredViewers.map((viewer: any) => (
+                    <div 
+                      key={viewer.uid} 
+                      className="flex items-center justify-between bg-light-gray/40 brutal-border border-2 p-2 rounded hover:bg-light-gray/70 transition-colors shadow-[2px_2px_0px_#111] hover:translate-x-[0.5px] hover:translate-y-[0.5px] hover:shadow-[1.5px_1.5px_0px_#111]"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full overflow-hidden brutal-border bg-white shadow-[1px_1px_0px_#111]">
+                          <img
+                            src={viewer.profilePhotoUrl || 'https://api.dicebear.com/7.x/pixel-art/svg?seed=' + viewer.username}
+                            alt={viewer.username}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <span 
+                          onClick={() => {
+                            setShowViewersList(false);
+                            closeStoryViewer();
+                            onViewProfile(viewer.uid);
+                          }}
+                          className="text-xs font-extrabold uppercase text-pure-black cursor-pointer hover:underline hover:text-brutal-yellow transition-colors"
+                        >
+                          @{viewer.username}
+                        </span>
                       </div>
-                      <span 
-                        onClick={() => {
-                          setShowViewersList(false);
-                          closeStoryViewer();
-                          onViewProfile(viewer.uid);
-                        }}
-                        className="text-xs font-extrabold uppercase text-pure-black cursor-pointer hover:underline hover:text-brutal-yellow transition-colors"
-                      >
-                        @{viewer.username}
+                      <span className="text-[8px] font-mono font-bold text-mid-gray uppercase bg-light-gray px-1.5 py-0.5 rounded border border-pure-black/10">
+                        {formatISTTime(viewer.viewedAt)}
                       </span>
                     </div>
-                    <span className="text-[8px] font-bold text-mid-gray uppercase">
-                      {formatISTTime(viewer.viewedAt)}
-                    </span>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* STORY CAMERA MODAL */}
       <StoryCameraModal
